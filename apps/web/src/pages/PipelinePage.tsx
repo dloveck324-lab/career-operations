@@ -422,13 +422,15 @@ export function PipelinePage() {
       if (evt.type === 'eval_done') {
         if (evt.jobId != null) setEvalQueueIds(prev => { const n = new Set(prev); n.delete(evt.jobId!); return n })
         setEvalToast({ text: `Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`, severity: 'info' })
+        void loadJobs(); void loadStats()
       }
-      if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: 'Evaluation complete', severity: 'success' }) }
-      if (evt.type === 'eval_paused') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: `Paused — evaluated ${evt.done ?? 0} jobs`, severity: 'warning' }) }
+      if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: 'Evaluation complete', severity: 'success' }); void loadJobs(); void loadStats() }
+      if (evt.type === 'eval_paused') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: `Paused — evaluated ${evt.done ?? 0} jobs`, severity: 'warning' }); void loadJobs(); void loadStats() }
       if (evt.type === 'error') setScanToast({ text: `Scan error: ${evt.message}`, severity: 'error' })
     }
     window.addEventListener('sse-scan', handler)
     return () => window.removeEventListener('sse-scan', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Scan handlers
