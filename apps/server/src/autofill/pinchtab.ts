@@ -167,6 +167,20 @@ export class PinchTabClient {
     await this.instancePost('/navigate', { url })
   }
 
+  async navigateNewTab(url: string): Promise<string> {
+    const res = await this.instancePost('/navigate', { url, newTab: true }) as { tabId?: string }
+    if (!res.tabId) throw new Error('PinchTab did not return a tabId')
+    return res.tabId
+  }
+
+  async closeTab(tabId: string): Promise<void> {
+    await fetch(`${this.cfg.serverUrl}/tabs/${tabId}/close`, {
+      method: 'POST',
+      headers: this.headers,
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => undefined)
+  }
+
   async snap(): Promise<SnapResult> {
     const res = await this.instanceGet('/snapshot', { filter: 'interactive' })
     return res as SnapResult

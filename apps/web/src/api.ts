@@ -42,6 +42,10 @@ export interface Stats { scanned?: number; prescreened?: number; evaluated?: num
 export interface ImportResult { profile: boolean; cv: boolean; filters: boolean; fieldMappings: number; warnings: string[] }
 export type AutofillModel = 'haiku' | 'sonnet' | 'opus'
 export interface AutofillResult { ok: boolean; message: string; model: AutofillModel; durationMs: number; status: 'ready_to_submit' | 'failed' }
+export interface AutofillStartResult { runId: string; jobId: number }
+export interface AutofillBulkResult { runs: Array<{ jobId: number; runId: string }>; model: AutofillModel; concurrency: number }
+export type RunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+export interface RunSummary { id: string; jobId: number; model: AutofillModel; status: RunStatus; startedAt: number; endedAt?: number; sessionId?: string; tabId?: string }
 export interface DiscoveredPortal { name: string; type: string; company_id: string; url: string; notes: string; source: string }
 
 export interface AutomationConfig {
@@ -88,7 +92,14 @@ export const api = {
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
   evaluateCompanies: () => req<string[]>('/evaluate/companies'),
   evaluateOne: (id: number, deep = false) => req<unknown>(`/evaluate/${id}`, { method: 'POST', body: JSON.stringify({ deep }) }),
-  apply: (id: number, model: AutofillModel = 'haiku') => req<AutofillResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model }) }),
+  apply: (id: number, model: AutofillModel = 'haiku') => req<AutofillStartResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model }) }),
+  applyBulk: (ids: number[], model: AutofillModel = 'haiku', concurrency = 3) =>
+    req<AutofillBulkResult>('/apply/bulk', { method: 'POST', body: JSON.stringify({ ids, model, concurrency }) }),
+  applyRun: (jobId: number) => req<{ run: RunSummary | null }>(`/apply/jobs/${jobId}/run`),
+  applySendMessage: (runId: string, text: string) =>
+    req<{ ok: boolean }>(`/apply/runs/${runId}/message`, { method: 'POST', body: JSON.stringify({ text }) }),
+  applyCancelRun: (runId: string) =>
+    req<{ ok: boolean }>(`/apply/runs/${runId}/cancel`, { method: 'POST' }),
   importStatus: () => req<{ needsImport: boolean; profile: boolean; cv: boolean; filters: boolean }>('/import/status'),
   runImport: () => req<ImportResult>('/import', { method: 'POST' }),
   settings: {

@@ -865,7 +865,12 @@ export function PipelinePage() {
               rowSelectionModel={selectionModel}
               onRowSelectionModelChange={setSelectionModel}
               onCellClick={handleCellClick}
-              getRowClassName={({ id }) => evalQueueIds.has(id as number) ? 'eval-queued' : ''}
+              getRowClassName={({ id }) => {
+                const n = id as number
+                if (autofillActiveIds.has(n)) return 'autofill-active'
+                if (evalQueueIds.has(n)) return 'eval-queued'
+                return ''
+              }}
               initialState={{ sorting: { sortModel: [{ field: 'score', sort: 'desc' }] } }}
               sx={{
                 border: 'none',
@@ -873,6 +878,8 @@ export function PipelinePage() {
                 '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
                 '& .MuiDataGrid-row.eval-queued': { bgcolor: 'rgba(251, 191, 36, 0.07)' },
                 '& .MuiDataGrid-row.eval-queued:hover': { bgcolor: 'rgba(251, 191, 36, 0.13)' },
+                '& .MuiDataGrid-row.autofill-active': { bgcolor: 'rgba(34, 197, 94, 0.12)' },
+                '& .MuiDataGrid-row.autofill-active:hover': { bgcolor: 'rgba(34, 197, 94, 0.22)' },
                 '& .MuiDataGrid-columnHeaders': { bgcolor: 'background.default' },
                 '& .MuiDataGrid-cell': { borderColor: 'divider' },
               }}

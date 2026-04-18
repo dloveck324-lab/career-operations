@@ -3,10 +3,11 @@ import {
   Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
 } from '@mui/material'
 import { Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown } from '@mui/icons-material'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { marked } from 'marked'
 import { api, type Job, type AutofillModel } from '../api.js'
 import { ScoreChip } from './ScoreChip.js'
+import { AutofillChatPanel } from './AutofillChatPanel.js'
 
 interface Props {
   job: Job | null
@@ -19,6 +20,18 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [autofillAnchor, setAutofillAnchor] = useState<null | HTMLElement>(null)
   const [evalAnchor, setEvalAnchor] = useState<null | HTMLElement>(null)
+  const [runId, setRunId] = useState<string | null>(null)
+
+  // Reset chat panel + message when switching jobs; look up any active run for this job
+  useEffect(() => {
+    if (!job) { setRunId(null); setMessage(null); return }
+    setMessage(null)
+    let cancelled = false
+    api.applyRun(job.id).then(res => {
+      if (!cancelled) setRunId(res.run?.id ?? null)
+    }).catch(() => { if (!cancelled) setRunId(null) })
+    return () => { cancelled = true }
+  }, [job?.id])
 
   const descriptionHtml = useMemo(() => {
     const raw = job?.content?.cleaned_md ?? job?.content?.raw_text ?? ''
@@ -39,9 +52,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     setLoading('apply')
     setMessage(null)
     try {
-      const result = await api.apply(job.id, model)
-      setMessage(result.message)
-      if (result.status === 'ready_to_submit') onStatusChange()
+      const { runId: newRunId } = await api.apply(job.id, model)
+      setRunId(newRunId)
     } catch (err) {
       setMessage(`Error: ${err}`)
     } finally {
@@ -124,6 +136,10 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
           )}
 
           {message && <Alert severity="info" sx={{ fontSize: '0.8rem' }}>{message}</Alert>}
+
+          {runId && job && (
+            <AutofillChatPanel runId={runId} jobId={job.id} />
+          )}
 
           {isInbox ? (
             <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
