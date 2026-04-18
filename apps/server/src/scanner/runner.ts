@@ -115,7 +115,7 @@ export async function runScan(
     return { ...stats, reskipped: 0, linkClosed: 0, paused: true }
   }
 
-  // RSS sources
+  // RSS sources — throttled: 2 s between requests to avoid Indeed 429s
   const rssBoards = filters?.job_boards?.filter(b => b.type === 'indeed_rss' && b.enabled) ?? []
   for (const board of rssBoards) {
     for (const query of board.queries) {
@@ -129,6 +129,7 @@ export async function runScan(
       } catch (err) {
         emit({ type: 'error', runId, message: `Indeed RSS "${query}": ${err}` })
       }
+      await new Promise(r => setTimeout(r, 2000))
     }
   }
 

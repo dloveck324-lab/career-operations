@@ -5,14 +5,22 @@ export async function scanIndeedRss(query: string): Promise<RawJob[]> {
   const encoded = encodeURIComponent(query)
   const url = `https://www.indeed.com/rss?q=${encoded}&sort=date&limit=25`
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; job-pipeline/1.0)' },
-    signal: AbortSignal.timeout(15_000),
-  })
-  if (!res.ok) throw new Error(`Indeed RSS: HTTP ${res.status}`)
-  const xml = await res.text()
-
-  return parseRssItems(xml)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; job-pipeline/1.0)' },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (res.status === 429) {
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, (attempt + 1) * 10_000))
+        continue
+      }
+      throw new Error(`Indeed RSS: HTTP 429 (rate limited after retries)`)
+    }
+    if (!res.ok) throw new Error(`Indeed RSS: HTTP ${res.status}`)
+    return parseRssItems(await res.text())
+  }
+  throw new Error('Indeed RSS: unreachable')
 }
 
 function parseRssItems(xml: string): RawJob[] {
