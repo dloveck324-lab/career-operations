@@ -12,7 +12,12 @@ interface AutofillResult {
   message: string
 }
 
+const INTERACTIVE_ROLES = new Set([
+  'textbox', 'searchbox', 'combobox', 'spinbutton', 'listbox', 'checkbox', 'radio',
+])
+
 const SUBMIT_LABELS = ['submit', 'apply', 'send application', 'submit application']
+const CLAUDE_TIMEOUT_MS = 60_000
 
 export async function startAutofill(job: Job, opts: { headless?: boolean } = {}): Promise<AutofillResult> {
   const client = new PinchTabClient()
@@ -21,26 +26,53 @@ export async function startAutofill(job: Job, opts: { headless?: boolean } = {})
     return { ok: false, filled: 0, unfilled: 0, cached: 0, message: 'PinchTab not reachable — run: pinchtab daemon install' }
   }
 
-  const mode = opts.headless !== false ? 'headless' : 'headed'
-  await client.startInstance(mode)
-  await client.navigate(job.url)
+  const headless = opts.headless !== false
 
-  const snap = await client.snap()
-  const inputs = (snap.elements ?? []).filter(el => ['input', 'textarea', 'select'].includes(el.tag.toLowerCase()))
+  let instanceUrl: string
+  try {
+    instanceUrl = await client.ensureInstance('default', headless)
+  } catch (err) {
+    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `PinchTab instance start failed: ${(err as Error).message}` }
+  }
+  client.setInstanceUrl(instanceUrl)
+
+  try {
+    await client.navigate(job.url)
+  } catch (err) {
+    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `Navigation failed: ${(err as Error).message}` }
+  }
+
+  // Give dynamic forms a moment to render
+  await new Promise(r => setTimeout(r, 1500))
+
+  let snap: Awaited<ReturnType<typeof client.snap>>
+  try {
+    snap = await client.snap()
+  } catch (err) {
+    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `Snapshot failed: ${(err as Error).message}` }
+  }
+
+  const inputs = (snap.nodes ?? []).filter(n =>
+    n.role && INTERACTIVE_ROLES.has(n.role.toLowerCase()) && n.name && !isSubmitButton(n.name)
+  )
 
   const filled: Array<{ ref: string; label: string; value: string }> = []
   const missing: Array<{ ref: string; label: string }> = []
   let cachedCount = 0
 
   for (const el of inputs) {
-    const label = el.label ?? el.placeholder ?? el.ref
-    if (!label || isSubmitButton(label)) continue
+    const label = (el.name ?? '').trim()
+    if (!label) continue
 
     const cached = lookupFieldMapping(label)
     if (cached) {
-      await client.fill(el.ref, cached)
-      filled.push({ ref: el.ref, label, value: cached })
-      cachedCount++
+      try {
+        await client.fill(el.ref, cached)
+        filled.push({ ref: el.ref, label, value: cached })
+        cachedCount++
+      } catch {
+        missing.push({ ref: el.ref, label })
+      }
     } else {
       missing.push({ ref: el.ref, label })
     }
@@ -52,25 +84,23 @@ export async function startAutofill(job: Job, opts: { headless?: boolean } = {})
     for (const m of missing) {
       const answer = answers[m.label]
       if (answer) {
-        await client.fill(m.ref, answer)
-        saveFieldMapping(m.label, answer, detectAtsType(job.url))
-        filled.push({ ref: m.ref, label: m.label, value: answer })
+        try {
+          await client.fill(m.ref, answer)
+          saveFieldMapping(m.label, answer, detectAtsType(job.url))
+          filled.push({ ref: m.ref, label: m.label, value: answer })
+        } catch { /* skip field if fill fails */ }
       }
     }
   }
 
-  // In headless mode: show browser to let user review before submitting
-  if (mode === 'headless') {
-    await client.showBrowser()
-  }
-
-  const unfilled = missing.length - (filled.length - cachedCount)
+  const unfilledCount = inputs.length - filled.length
+  const modeNote = headless ? 'Browser is headless — re-run with Visible to review.' : 'Review the browser window and click Submit when ready.'
   return {
     ok: true,
     filled: filled.length,
-    unfilled: Math.max(0, unfilled),
+    unfilled: Math.max(0, unfilledCount),
     cached: cachedCount,
-    message: `Filled ${filled.length} fields (${cachedCount} cached). Review form and click Submit when ready.`,
+    message: `Filled ${filled.length} fields (${cachedCount} cached, ${unfilledCount} unfilled). ${modeNote}`,
   }
 }
 
@@ -93,6 +123,13 @@ ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
 
   return new Promise((resolve) => {
     const chunks: Buffer[] = []
+    let settled = false
+    const finish = (result: Record<string, string>) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+
     const child = spawn('claude', [
       '-p', prompt,
       '--model', 'claude-haiku-4-5-20251001',
@@ -100,16 +137,22 @@ ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
       '--output-format', 'text',
     ])
 
+    const killer = setTimeout(() => {
+      try { child.kill('SIGKILL') } catch { /* ignore */ }
+      finish({})
+    }, CLAUDE_TIMEOUT_MS)
+
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
     child.on('close', () => {
+      clearTimeout(killer)
       try {
         const raw = Buffer.concat(chunks).toString()
         const jsonMatch = raw.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) { resolve({}); return }
-        resolve(JSON.parse(jsonMatch[0]) as Record<string, string>)
-      } catch { resolve({}) }
+        if (!jsonMatch) { finish({}); return }
+        finish(JSON.parse(jsonMatch[0]) as Record<string, string>)
+      } catch { finish({}) }
     })
-    child.on('error', () => resolve({}))
+    child.on('error', () => { clearTimeout(killer); finish({}) })
   })
 }
 

@@ -9,19 +9,29 @@ interface PinchTabConfig {
   timeoutMs: number
 }
 
-interface Element {
+interface SnapNode {
   ref: string
-  tag: string
-  type?: string
-  label?: string
-  placeholder?: string
+  role: string
+  name?: string
   value?: string
+  depth?: number
 }
 
 interface SnapResult {
-  elements: Element[]
+  nodes: SnapNode[]
   url: string
   title: string
+  count: number
+}
+
+interface InstanceInfo {
+  id: string
+  profileId: string
+  profileName: string
+  port: string
+  url: string
+  headless: boolean
+  status: string
 }
 
 function readToken(): string | null {
@@ -41,7 +51,7 @@ export class PinchTabClient {
       serverUrl: overrides.serverUrl ?? 'http://127.0.0.1:9867',
       instanceUrl: overrides.instanceUrl ?? 'http://127.0.0.1:9868',
       token: overrides.token ?? readToken(),
-      timeoutMs: overrides.timeoutMs ?? 30_000,
+      timeoutMs: overrides.timeoutMs ?? 45_000,
     }
   }
 
@@ -62,13 +72,63 @@ export class PinchTabClient {
     } catch { return false }
   }
 
-  async startInstance(mode: 'headless' | 'headed' = 'headless'): Promise<void> {
-    await fetch(`${this.cfg.serverUrl}/instances/start`, {
+  async listInstances(): Promise<InstanceInfo[]> {
+    const res = await fetch(`${this.cfg.serverUrl}/instances`, {
+      headers: this.headers,
+      signal: AbortSignal.timeout(5_000),
+    })
+    if (!res.ok) return []
+    return res.json().catch(() => []) as Promise<InstanceInfo[]>
+  }
+
+  async stopProfile(profileId: string): Promise<void> {
+    await fetch(`${this.cfg.serverUrl}/profiles/${profileId}/stop`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({ profileId: 'default', mode }),
-      signal: AbortSignal.timeout(this.cfg.timeoutMs),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => undefined)
+    // wait briefly for the instance to release its port
+    await new Promise(r => setTimeout(r, 1000))
+  }
+
+  async startProfile(profileName: string, headless: boolean): Promise<InstanceInfo | null> {
+    const res = await fetch(`${this.cfg.serverUrl}/profiles/${profileName}/start`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({ headless }),
+      signal: AbortSignal.timeout(30_000),
     })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`startProfile failed: HTTP ${res.status} — ${text.slice(0, 200)}`)
+    }
+    return res.json().catch(() => null) as Promise<InstanceInfo | null>
+  }
+
+  /**
+   * Ensure a running instance for the given profile in the desired mode.
+   * Returns the instance URL to use for browser control.
+   */
+  async ensureInstance(profileName = 'default', headless = true): Promise<string> {
+    const instances = await this.listInstances()
+    const existing = instances.find(i => i.profileName === profileName && i.status === 'running')
+
+    if (existing && existing.headless === headless) {
+      return existing.url
+    }
+
+    if (existing) {
+      // Mode mismatch — stop and restart in desired mode
+      await this.stopProfile(existing.profileId)
+    }
+
+    const started = await this.startProfile(profileName, headless)
+    if (!started?.url) throw new Error('Failed to start PinchTab instance')
+    return started.url
+  }
+
+  setInstanceUrl(url: string): void {
+    this.cfg.instanceUrl = url
   }
 
   async navigate(url: string): Promise<void> {
@@ -76,29 +136,16 @@ export class PinchTabClient {
   }
 
   async snap(): Promise<SnapResult> {
-    const res = await this.instanceGet('/snapshot', { filter: 'interactive', format: 'compact' })
+    const res = await this.instanceGet('/snapshot', { filter: 'interactive' })
     return res as SnapResult
   }
 
-  async fill(ref: string, value: string): Promise<void> {
-    await this.instancePost('/action', { kind: 'fill', selector: ref, text: value })
+  async fill(selector: string, value: string): Promise<void> {
+    await this.instancePost('/action', { kind: 'fill', selector, text: value })
   }
 
-  async click(ref: string): Promise<void> {
-    await this.instancePost('/action', { kind: 'click', selector: ref })
-  }
-
-  async getText(): Promise<string> {
-    const res = await this.instanceGet('/text', {}) as { text?: string }
-    return res.text ?? ''
-  }
-
-  async showBrowser(): Promise<void> {
-    await fetch(`${this.cfg.serverUrl}/instances/show`, {
-      method: 'POST',
-      headers: this.headers,
-      signal: AbortSignal.timeout(5_000),
-    })
+  async click(selector: string): Promise<void> {
+    await this.instancePost('/action', { kind: 'click', selector })
   }
 
   private async instanceGet(path: string, params: Record<string, string>): Promise<unknown> {
@@ -110,7 +157,7 @@ export class PinchTabClient {
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`PinchTab ${path}: HTTP ${res.status} — ${text.slice(0, 200)}`)
+      throw new Error(`PinchTab GET ${path}: HTTP ${res.status} — ${text.slice(0, 200)}`)
     }
     return res.json().catch(() => ({}))
   }
@@ -124,7 +171,7 @@ export class PinchTabClient {
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`PinchTab ${path}: HTTP ${res.status} — ${text.slice(0, 200)}`)
+      throw new Error(`PinchTab POST ${path}: HTTP ${res.status} — ${text.slice(0, 200)}`)
     }
     return res.json().catch(() => ({}))
   }
