@@ -1,8 +1,8 @@
 import {
   Drawer, Box, Typography, Stack, Chip, Button, IconButton,
-  Divider, CircularProgress, Alert,
+  Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
 } from '@mui/material'
-import { Close, OpenInNew, Send, SkipNext, Psychology, Refresh } from '@mui/icons-material'
+import { Close, OpenInNew, Send, SkipNext, Assessment, Refresh, ArrowDropDown } from '@mui/icons-material'
 import { useState, useMemo } from 'react'
 import { marked } from 'marked'
 import { api, type Job } from '../api.js'
@@ -17,25 +17,45 @@ interface Props {
 export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [autofillAnchor, setAutofillAnchor] = useState<null | HTMLElement>(null)
+  const [evalAnchor, setEvalAnchor] = useState<null | HTMLElement>(null)
 
   const descriptionHtml = useMemo(() => {
     const raw = job?.content?.cleaned_md ?? job?.content?.raw_text ?? ''
     const text = raw.slice(0, 6000)
     if (text.trimStart().startsWith('<')) return text
-    // Normalize line breaks: "\n \n" (with whitespace) → "\n\n", single "\n" between content → "\n\n"
-    const normalized = text
-      .replace(/\n[ \t]*\n/g, '\n\n')
-      .replace(/([^\n])\n([^\n])/g, '$1\n\n$2')
-    return marked.parse(normalized) as string
+    // Normalize whitespace-only lines (e.g. "\n \n") into proper blank lines
+    const normalized = text.replace(/\n[ \t]*\n/g, '\n\n')
+    // breaks: true renders single \n as <br> without forcing paragraph splits
+    return marked.parse(normalized, { breaks: true }) as string
   }, [job?.content?.cleaned_md, job?.content?.raw_text])
+
+  const isInbox = job?.status === 'scanned' || job?.status === 'prescreened'
 
   const handleApply = async (showBrowser = false) => {
     if (!job) return
+    setAutofillAnchor(null)
     setLoading('apply')
     setMessage(null)
     try {
       const result = await api.apply(job.id, showBrowser)
       setMessage(result.message)
+    } catch (err) {
+      setMessage(`Error: ${err}`)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleEvaluate = async (deep = false) => {
+    if (!job) return
+    setEvalAnchor(null)
+    setLoading('eval')
+    setMessage(null)
+    try {
+      await api.evaluateOne(job.id, deep)
+      setMessage(deep ? 'Deep evaluation complete' : 'Evaluation complete')
+      onStatusChange()
     } catch (err) {
       setMessage(`Error: ${err}`)
     } finally {
@@ -70,27 +90,25 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     onClose()
   }
 
-  const handleDeepEval = async () => {
-    if (!job) return
-    setLoading('eval')
-    try {
-      await api.evaluateOne(job.id, true)
-      setMessage('Deep evaluation complete')
-      onStatusChange()
-    } catch (err) {
-      setMessage(`Error: ${err}`)
-    } finally {
-      setLoading(null)
-    }
-  }
-
   return (
     <Drawer anchor="right" open={!!job} onClose={onClose} PaperProps={{ sx: { width: 520, bgcolor: 'background.paper' } }}>
       {job && (
         <Box sx={{ p: 3, height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-            <Box>
-              <Typography variant="h6" sx={{ lineHeight: 1.3 }}>{job.title}</Typography>
+            <Box sx={{ flex: 1, mr: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <Typography variant="h6" sx={{ lineHeight: 1.3 }}>{job.title}</Typography>
+                <IconButton
+                  component="a"
+                  href={job.url}
+                  target="_blank"
+                  rel="noopener"
+                  size="small"
+                  sx={{ color: 'text.secondary', flexShrink: 0 }}
+                >
+                  <OpenInNew sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Stack>
               <Typography variant="subtitle2" color="text.secondary">{job.company}</Typography>
             </Box>
             <IconButton onClick={onClose} size="small"><Close /></IconButton>
@@ -114,80 +132,98 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
 
           {message && <Alert severity="info" sx={{ fontSize: '0.8rem' }}>{message}</Alert>}
 
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Button
-              variant="contained"
-              startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
-              onClick={() => handleApply(false)}
-              disabled={!!loading}
-              size="small"
-            >
-              Auto-fill (background)
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => handleApply(true)}
-              disabled={!!loading}
-              size="small"
-            >
-              Auto-fill (visible)
-            </Button>
-            {job.status === 'evaluated' && (
+          {isInbox ? (
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+              <ButtonGroup size="small" variant="contained" disabled={!!loading}>
+                <Button
+                  startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
+                  onClick={() => handleApply(false)}
+                >
+                  Auto Fill
+                </Button>
+                <Button sx={{ px: 0.5 }} onClick={e => setAutofillAnchor(e.currentTarget)}>
+                  <ArrowDropDown fontSize="small" />
+                </Button>
+              </ButtonGroup>
+              <Menu anchorEl={autofillAnchor} open={Boolean(autofillAnchor)} onClose={() => setAutofillAnchor(null)}>
+                <MenuItem onClick={() => handleApply(false)}>Background</MenuItem>
+                <MenuItem onClick={() => handleApply(true)}>Visible</MenuItem>
+              </Menu>
+
+              <ButtonGroup size="small" variant="outlined" disabled={!!loading}>
+                <Button
+                  startIcon={loading === 'eval' ? <CircularProgress size={14} color="inherit" /> : <Assessment />}
+                  onClick={() => handleEvaluate(false)}
+                >
+                  Evaluate
+                </Button>
+                <Button sx={{ px: 0.5 }} onClick={e => setEvalAnchor(e.currentTarget)}>
+                  <ArrowDropDown fontSize="small" />
+                </Button>
+              </ButtonGroup>
+              <Menu anchorEl={evalAnchor} open={Boolean(evalAnchor)} onClose={() => setEvalAnchor(null)}>
+                <MenuItem onClick={() => handleEvaluate(false)}>Quick (Haiku)</MenuItem>
+                <MenuItem onClick={() => handleEvaluate(true)}>Deep (Sonnet)</MenuItem>
+              </Menu>
+
+              <Button
+                variant="text"
+                color="inherit"
+                startIcon={<SkipNext />}
+                onClick={handleSkip}
+                disabled={!!loading}
+                size="small"
+              >
+                Skip
+              </Button>
+            </Stack>
+          ) : (
+            <Stack direction="row" spacing={1} flexWrap="wrap">
               <Button
                 variant="contained"
-                color="success"
-                startIcon={loading === 'applied' ? <CircularProgress size={14} color="inherit" /> : <Send />}
-                onClick={handleMarkApplied}
+                startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
+                onClick={() => handleApply(false)}
                 disabled={!!loading}
                 size="small"
               >
-                Mark Applied
+                Auto Fill
               </Button>
-            )}
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<Psychology />}
-              onClick={handleDeepEval}
-              disabled={!!loading}
-              size="small"
-            >
-              Deep Eval
-            </Button>
-            {job.status === 'evaluated' && (
+              {job.status === 'evaluated' && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={loading === 'applied' ? <CircularProgress size={14} color="inherit" /> : <Send />}
+                  onClick={handleMarkApplied}
+                  disabled={!!loading}
+                  size="small"
+                >
+                  Mark Applied
+                </Button>
+              )}
+              {job.status === 'evaluated' && (
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  startIcon={loading === 'requeue' ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
+                  onClick={handleRequeue}
+                  disabled={!!loading}
+                  size="small"
+                >
+                  Re-queue
+                </Button>
+              )}
               <Button
-                variant="outlined"
-                color="warning"
-                startIcon={loading === 'requeue' ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
-                onClick={handleRequeue}
+                variant="text"
+                color="inherit"
+                startIcon={<SkipNext />}
+                onClick={handleSkip}
                 disabled={!!loading}
                 size="small"
               >
-                Re-queue
+                Skip
               </Button>
-            )}
-            <Button
-              variant="text"
-              color="inherit"
-              startIcon={<SkipNext />}
-              onClick={handleSkip}
-              disabled={!!loading}
-              size="small"
-            >
-              Skip
-            </Button>
-            <Button
-              component="a"
-              href={job.url}
-              target="_blank"
-              rel="noopener"
-              endIcon={<OpenInNew />}
-              size="small"
-              variant="text"
-            >
-              View posting
-            </Button>
-          </Stack>
+            </Stack>
+          )}
 
           <Divider />
 
