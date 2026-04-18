@@ -105,6 +105,30 @@ export class PinchTabClient {
     return res.json().catch(() => null) as Promise<InstanceInfo | null>
   }
 
+  async waitForInstanceReady(instanceUrl: string, timeoutMs = 30_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    let lastErr = 'unknown'
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${instanceUrl}/health`, {
+          headers: this.headers,
+          signal: AbortSignal.timeout(2_000),
+        })
+        if (res.ok) {
+          const data = await res.json().catch(() => ({})) as { status?: string }
+          if (data.status === 'ok') return
+          lastErr = `status=${data.status ?? 'unknown'}`
+        } else {
+          lastErr = `HTTP ${res.status}`
+        }
+      } catch (e) {
+        lastErr = (e as Error).message
+      }
+      await new Promise(r => setTimeout(r, 500))
+    }
+    throw new Error(`Instance not ready after ${timeoutMs}ms (${lastErr})`)
+  }
+
   /**
    * Ensure a running instance for the given profile in the desired mode.
    * Returns the instance URL to use for browser control.
@@ -124,6 +148,7 @@ export class PinchTabClient {
 
     const started = await this.startProfile(profileName, headless)
     if (!started?.url) throw new Error('Failed to start PinchTab instance')
+    await this.waitForInstanceReady(started.url)
     return started.url
   }
 
