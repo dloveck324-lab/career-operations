@@ -40,7 +40,8 @@ export interface TokenUsage { prompt: number; completion: number; total: number 
 export interface Health { ok: boolean; config: { profile: boolean; cv: boolean; filters: boolean }; tokens: TokenUsage }
 export interface Stats { scanned?: number; prescreened?: number; evaluated?: number; applied?: number; interview?: number; completed?: number; skipped?: number }
 export interface ImportResult { profile: boolean; cv: boolean; filters: boolean; fieldMappings: number; warnings: string[] }
-export interface AutofillResult { ok: boolean; filled: number; unfilled: number; cached: number; message: string }
+export type AutofillModel = 'haiku' | 'sonnet' | 'opus'
+export interface AutofillResult { ok: boolean; message: string; model: AutofillModel; durationMs: number }
 export interface DiscoveredPortal { name: string; type: string; company_id: string; url: string; notes: string; source: string }
 
 export interface AutomationConfig {
@@ -87,7 +88,7 @@ export const api = {
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
   evaluateCompanies: () => req<string[]>('/evaluate/companies'),
   evaluateOne: (id: number, deep = false) => req<unknown>(`/evaluate/${id}`, { method: 'POST', body: JSON.stringify({ deep }) }),
-  apply: (id: number, showBrowser = false) => req<AutofillResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ showBrowser }) }),
+  apply: (id: number, model: AutofillModel = 'haiku') => req<AutofillResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model }) }),
   importStatus: () => req<{ needsImport: boolean; profile: boolean; cv: boolean; filters: boolean }>('/import/status'),
   runImport: () => req<ImportResult>('/import', { method: 'POST' }),
   settings: {

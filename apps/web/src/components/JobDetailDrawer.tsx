@@ -5,7 +5,7 @@ import {
 import { Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown } from '@mui/icons-material'
 import { useState, useMemo } from 'react'
 import { marked } from 'marked'
-import { api, type Job } from '../api.js'
+import { api, type Job, type AutofillModel } from '../api.js'
 import { ScoreChip } from './ScoreChip.js'
 
 interface Props {
@@ -33,13 +33,13 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
 
   const isInbox = job?.status === 'scanned' || job?.status === 'prescreened'
 
-  const handleApply = async (showBrowser = false) => {
+  const handleApply = async (model: AutofillModel = 'haiku') => {
     if (!job) return
     setAutofillAnchor(null)
     setLoading('apply')
     setMessage(null)
     try {
-      const result = await api.apply(job.id, showBrowser)
+      const result = await api.apply(job.id, model)
       setMessage(result.message)
     } catch (err) {
       setMessage(`Error: ${err}`)
@@ -129,7 +129,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
               <ButtonGroup size="small" variant="contained" disabled={!!loading}>
                 <Button
                   startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
-                  onClick={() => handleApply(false)}
+                  onClick={() => handleApply('haiku')}
                 >
                   Auto Fill
                 </Button>
@@ -138,8 +138,9 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                 </Button>
               </ButtonGroup>
               <Menu anchorEl={autofillAnchor} open={Boolean(autofillAnchor)} onClose={() => setAutofillAnchor(null)}>
-                <MenuItem onClick={() => handleApply(false)}>Background</MenuItem>
-                <MenuItem onClick={() => handleApply(true)}>Visible</MenuItem>
+                <MenuItem onClick={() => handleApply('haiku')}>Haiku (fast)</MenuItem>
+                <MenuItem onClick={() => handleApply('sonnet')}>Sonnet (balanced)</MenuItem>
+                <MenuItem onClick={() => handleApply('opus')}>Opus (best)</MenuItem>
               </Menu>
 
               <ButtonGroup size="small" variant="outlined" disabled={!!loading}>
@@ -174,7 +175,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
               <ButtonGroup size="small" variant="contained" disabled={!!loading}>
                 <Button
                   startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
-                  onClick={() => handleApply(false)}
+                  onClick={() => handleApply('haiku')}
                 >
                   Auto Fill
                 </Button>
@@ -183,8 +184,9 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                 </Button>
               </ButtonGroup>
               <Menu anchorEl={autofillAnchor} open={Boolean(autofillAnchor)} onClose={() => setAutofillAnchor(null)}>
-                <MenuItem onClick={() => handleApply(false)}>Background</MenuItem>
-                <MenuItem onClick={() => handleApply(true)}>Visible</MenuItem>
+                <MenuItem onClick={() => handleApply('haiku')}>Haiku (fast)</MenuItem>
+                <MenuItem onClick={() => handleApply('sonnet')}>Sonnet (balanced)</MenuItem>
+                <MenuItem onClick={() => handleApply('opus')}>Opus (best)</MenuItem>
               </Menu>
 
               {job.status === 'evaluated' && (

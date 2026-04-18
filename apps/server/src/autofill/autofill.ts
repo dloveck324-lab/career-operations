@@ -1,169 +1,155 @@
 import { PinchTabClient } from './pinchtab.js'
-import { lookupFieldMapping, saveFieldMapping } from '../db/queries.js'
 import { loadProfile, loadCv } from '@job-pipeline/core'
 import { spawn } from 'child_process'
 import type { Job } from '../db/schema.js'
 
+export type AutofillModel = 'haiku' | 'sonnet' | 'opus'
+
 interface AutofillResult {
   ok: boolean
-  filled: number
-  unfilled: number
-  cached: number
   message: string
+  model: AutofillModel
+  durationMs: number
 }
 
-const INTERACTIVE_ROLES = new Set([
-  'textbox', 'searchbox', 'combobox', 'spinbutton', 'listbox', 'checkbox', 'radio',
-])
+const MODEL_IDS: Record<AutofillModel, string> = {
+  haiku: 'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-7',
+}
 
-const SUBMIT_LABELS = ['submit', 'apply', 'send application', 'submit application']
-const CLAUDE_TIMEOUT_MS = 60_000
+const CLAUDE_TIMEOUT_MS: Record<AutofillModel, number> = {
+  haiku: 4 * 60_000,
+  sonnet: 8 * 60_000,
+  opus: 12 * 60_000,
+}
 
-export async function startAutofill(job: Job, opts: { headless?: boolean } = {}): Promise<AutofillResult> {
+export async function startAutofill(job: Job, opts: { model?: AutofillModel } = {}): Promise<AutofillResult> {
+  const model: AutofillModel = opts.model ?? 'haiku'
+  const started = Date.now()
   const client = new PinchTabClient()
 
   if (!await client.isReachable()) {
-    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: 'PinchTab not reachable — run: pinchtab daemon install' }
+    return { ok: false, model, durationMs: 0, message: 'PinchTab not reachable — run: pinchtab daemon install' }
   }
 
-  const headless = opts.headless !== false
-
-  let instanceUrl: string
+  // Ensure a headed Chrome window is available; the agent will use the pinchtab CLI.
   try {
-    instanceUrl = await client.ensureInstance('default', headless)
+    await client.ensureInstance('default', false)
   } catch (err) {
-    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `PinchTab instance start failed: ${(err as Error).message}` }
-  }
-  client.setInstanceUrl(instanceUrl)
-
-  try {
-    await client.navigate(job.url)
-  } catch (err) {
-    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `Navigation failed: ${(err as Error).message}` }
+    return { ok: false, model, durationMs: 0, message: `PinchTab instance start failed: ${(err as Error).message}` }
   }
 
-  // Give dynamic forms a moment to render
-  await new Promise(r => setTimeout(r, 1500))
-
-  let snap: Awaited<ReturnType<typeof client.snap>>
-  try {
-    snap = await client.snap()
-  } catch (err) {
-    return { ok: false, filled: 0, unfilled: 0, cached: 0, message: `Snapshot failed: ${(err as Error).message}` }
+  const profile = loadProfile()
+  const cv = loadCv()
+  if (!profile) {
+    return { ok: false, model, durationMs: 0, message: 'No candidate profile loaded (config/profile.yml)' }
   }
 
-  const inputs = (snap.nodes ?? []).filter(n =>
-    n.role && INTERACTIVE_ROLES.has(n.role.toLowerCase()) && n.name && !isSubmitButton(n.name)
-  )
+  const prompt = buildAgentPrompt(job, profile, cv)
 
-  const filled: Array<{ ref: string; label: string; value: string }> = []
-  const missing: Array<{ ref: string; label: string }> = []
-  let cachedCount = 0
-
-  for (const el of inputs) {
-    const label = (el.name ?? '').trim()
-    if (!label) continue
-
-    const cached = lookupFieldMapping(label)
-    if (cached) {
-      try {
-        await client.fill(el.ref, cached)
-        filled.push({ ref: el.ref, label, value: cached })
-        cachedCount++
-      } catch {
-        missing.push({ ref: el.ref, label })
-      }
-    } else {
-      missing.push({ ref: el.ref, label })
-    }
-  }
-
-  // Batch Claude call for all missing fields
-  if (missing.length > 0) {
-    const answers = await askClaudeForFields(job, missing.map(m => m.label))
-    for (const m of missing) {
-      const answer = answers[m.label]
-      if (answer) {
-        try {
-          await client.fill(m.ref, answer)
-          saveFieldMapping(m.label, answer, detectAtsType(job.url))
-          filled.push({ ref: m.ref, label: m.label, value: answer })
-        } catch { /* skip field if fill fails */ }
-      }
-    }
-  }
-
-  const unfilledCount = inputs.length - filled.length
-  const modeNote = headless ? 'Browser is headless — re-run with Visible to review.' : 'Review the browser window and click Submit when ready.'
+  const result = await runClaudeAgent(prompt, model)
   return {
-    ok: true,
-    filled: filled.length,
-    unfilled: Math.max(0, unfilledCount),
-    cached: cachedCount,
-    message: `Filled ${filled.length} fields (${cachedCount} cached, ${unfilledCount} unfilled). ${modeNote}`,
+    ok: result.ok,
+    model,
+    durationMs: Date.now() - started,
+    message: result.message,
   }
 }
 
-async function askClaudeForFields(job: Job, questions: string[]): Promise<Record<string, string>> {
-  const profile = loadProfile()
-  const cv = loadCv()
-  if (!profile) return {}
-
+function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv: string | null): string {
+  if (!profile) return ''
   const p = profile.candidate
-  const prompt = `You are filling out a job application form for:
-Job: ${job.title} @ ${job.company}
-Candidate: ${p.full_name} | ${p.email} | ${p.phone ?? ''} | ${p.location ?? ''}
-LinkedIn: ${p.linkedin ?? ''} | GitHub: ${p.github ?? ''} | Portfolio: ${p.portfolio_url ?? ''}
-${cv ? `\nCV:\n${cv.slice(0, 3000)}` : ''}
+  return `You are an autonomous job-application agent. Use the \`pinchtab\` CLI (already installed, authenticated, and pointing at a running headed Chrome instance) to open the job page below and fill out its application form as completely and accurately as possible.
 
-Answer each form field below with the most appropriate response. Return ONLY a JSON object mapping each question to its answer. Keep answers concise and professional.
+## Job
+- Title: ${job.title}
+- Company: ${job.company}
+- URL: ${job.url}
 
-Fields to fill:
-${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
+## Candidate profile
+- Full name: ${p.full_name}
+- Email: ${p.email}
+- Phone: ${p.phone ?? ''}
+- Location: ${p.location ?? ''}
+- LinkedIn: ${p.linkedin ?? ''}
+- GitHub: ${p.github ?? ''}
+- Portfolio: ${p.portfolio_url ?? ''}
+${(p as { work_authorization?: string }).work_authorization ? `- Work authorization: ${(p as { work_authorization?: string }).work_authorization}` : ''}
 
+## CV (for open-ended questions like "why this role", experience summaries, etc.)
+${cv ? cv.slice(0, 5000) : '(no CV provided)'}
+
+## PinchTab CLI reference (use bash to run these)
+- \`pinchtab nav <url>\` — navigate the current tab
+- \`pinchtab snap -i -c\` — get interactive elements with refs like e3, e7, plus their roles/labels
+- \`pinchtab snap --text\` — page text
+- \`pinchtab text\` — readable page text
+- \`pinchtab fill <ref|css> <value>\` — set an input/textarea value
+- \`pinchtab select <ref|css> <value>\` — pick a dropdown option (value or visible text)
+- \`pinchtab click <ref|css>\` — click an element (use for checkboxes, radios, "Apply" button to open the form, expanding sections)
+- \`pinchtab press <key>\` — e.g. Tab, Enter, Escape
+- \`pinchtab find "<query>"\` — semantic search for an element (returns refs)
+
+## Your task
+1. Navigate to the job URL.
+2. If the page is the listing (not the application form), locate and click the "Apply" / "Apply now" button to open the form. Many ATS pages (Greenhouse, Ashby, Lever) host the form inline — re-snapshot after clicking.
+3. Re-snapshot the page. Fill every required field using the candidate profile and CV. For long-form questions ("Why this company?", "Tell us about yourself"), write a concise, honest 2-4 sentence answer grounded in the CV.
+4. Handle multi-step forms: after filling the visible fields, click Next/Continue, re-snapshot, and continue. Do NOT click Submit / Send application — stop when you reach it.
+5. If uploads (resume, cover letter) are requested, skip them — the user will handle uploads manually. Note which uploads are still needed in your summary.
+6. If you get stuck (captcha, login wall, unrecognized field), stop and report what's blocking.
+
+## Output
+After you finish (or get blocked), respond with a brief summary (<= 8 lines) covering:
+- Fields filled successfully
+- Fields skipped and why (upload, captcha, ambiguous, etc.)
+- Whether the form is ready for the user to review and submit
+Do not include the full prompt or verbose tool output.`
+}
+
+async function runClaudeAgent(prompt: string, model: AutofillModel): Promise<{ ok: boolean; message: string }> {
   return new Promise((resolve) => {
-    const chunks: Buffer[] = []
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
     let settled = false
-    const finish = (result: Record<string, string>) => {
-      if (settled) return
-      settled = true
-      resolve(result)
-    }
 
     const child = spawn('claude', [
       '-p', prompt,
-      '--model', 'claude-haiku-4-5-20251001',
+      '--model', MODEL_IDS[model],
       '--dangerously-skip-permissions',
       '--output-format', 'text',
-    ])
+    ], { env: { ...process.env } })
 
-    const killer = setTimeout(() => {
+    const timer = setTimeout(() => {
       try { child.kill('SIGKILL') } catch { /* ignore */ }
-      finish({})
-    }, CLAUDE_TIMEOUT_MS)
+      if (!settled) {
+        settled = true
+        resolve({ ok: false, message: `Claude agent timed out after ${CLAUDE_TIMEOUT_MS[model] / 1000}s` })
+      }
+    }, CLAUDE_TIMEOUT_MS[model])
 
-    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-    child.on('close', () => {
-      clearTimeout(killer)
-      try {
-        const raw = Buffer.concat(chunks).toString()
-        const jsonMatch = raw.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) { finish({}); return }
-        finish(JSON.parse(jsonMatch[0]) as Record<string, string>)
-      } catch { finish({}) }
+    child.stdout.on('data', (c: Buffer) => stdoutChunks.push(c))
+    child.stderr.on('data', (c: Buffer) => stderrChunks.push(c))
+
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      if (settled) return
+      settled = true
+      resolve({ ok: false, message: `Failed to spawn claude CLI: ${err.message}` })
     })
-    child.on('error', () => { clearTimeout(killer); finish({}) })
+
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (settled) return
+      settled = true
+      const stdout = Buffer.concat(stdoutChunks).toString().trim()
+      const stderr = Buffer.concat(stderrChunks).toString().trim()
+      if (code !== 0) {
+        resolve({ ok: false, message: `Claude exited ${code}: ${stderr.slice(0, 400) || stdout.slice(0, 400)}` })
+        return
+      }
+      const summary = stdout.length > 0 ? stdout : '(no output)'
+      resolve({ ok: true, message: summary.slice(0, 2000) })
+    })
   })
-}
-
-function isSubmitButton(label: string): boolean {
-  return SUBMIT_LABELS.some(s => label.toLowerCase().includes(s))
-}
-
-function detectAtsType(url: string): string {
-  if (url.includes('greenhouse.io')) return 'greenhouse'
-  if (url.includes('ashbyhq.com')) return 'ashby'
-  if (url.includes('jobs.lever.co')) return 'lever'
-  if (url.includes('myworkdayjobs.com')) return 'workday'
-  return 'custom'
 }
