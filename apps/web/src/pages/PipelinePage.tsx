@@ -20,7 +20,7 @@ import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
 
 // ─── SSE event shape ──────────────────────────────────────────────────────────
-interface ScanEvent { type: string; existing?: number; added?: number; reskipped?: number; linkClosed?: number; company?: string; jobId?: number; score?: number; total?: number; done?: number; message?: string }
+interface ScanEvent { type: string; existing?: number; added?: number; reskipped?: number; linkClosed?: number; company?: string; jobId?: number; jobIds?: number[]; score?: number; total?: number; done?: number; message?: string }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS: Array<{ label: string; statuses: JobStatus[] }> = [
@@ -177,11 +177,11 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   const size = cx * 2
   const C = 2 * Math.PI * r
 
-  // fill = sessions / 50, visual scale only (50 sessions ≈ full ring)
+  // fill = messages / 70000 (approx Claude Max weekly message scale)
   const [fill, setFill] = useState(0)
   useEffect(() => {
     if (usage === null) return
-    const target = Math.min(1, usage.sessions / 50)
+    const target = Math.min(1, usage.messages / 70000)
     const t = setTimeout(() => setFill(target), 80)
     return () => clearTimeout(t)
   }, [usage])
@@ -326,6 +326,7 @@ export function PipelinePage() {
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>([])
   const [bulkLoading, setBulkLoading] = useState<string | null>(null)
   const [evaluatingJobId, setEvaluatingJobId] = useState<number | null>(null)
+  const [evalQueueIds, setEvalQueueIds] = useState<Set<number>>(new Set())
   const [positiveKeywords, setPositiveKeywords] = useState<string[]>([])
 
   const selectedIds = selectionModel as number[]
@@ -370,10 +371,14 @@ export function PipelinePage() {
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
         setScanToast({ text: `Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'warning' })
       }
+      if (evt.type === 'eval_queued' && evt.jobIds) { setEvalQueueIds(new Set(evt.jobIds)) }
       if (evt.type === 'eval_start') { setEvaluating(true); setProgress(`Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`) }
-      if (evt.type === 'eval_done') { setProgress(`Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`) }
-      if (evt.type === 'eval_all_done') { setEvaluating(false); setProgress('Evaluation complete') }
-      if (evt.type === 'eval_paused') { setEvaluating(false); setProgress(`Paused — evaluated ${evt.done ?? 0} jobs`) }
+      if (evt.type === 'eval_done') {
+        if (evt.jobId != null) setEvalQueueIds(prev => { const n = new Set(prev); n.delete(evt.jobId!); return n })
+        setProgress(`Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`)
+      }
+      if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setProgress('Evaluation complete') }
+      if (evt.type === 'eval_paused') { setEvaluating(false); setEvalQueueIds(new Set()); setProgress(`Paused — evaluated ${evt.done ?? 0} jobs`) }
       if (evt.type === 'error') setProgress(`Error: ${evt.message}`)
     }
     window.addEventListener('sse-scan', handler)
@@ -760,11 +765,14 @@ export function PipelinePage() {
               rowSelectionModel={selectionModel}
               onRowSelectionModelChange={setSelectionModel}
               onCellClick={handleCellClick}
+              getRowClassName={({ id }) => evalQueueIds.has(id as number) ? 'eval-queued' : ''}
               initialState={{ sorting: { sortModel: [{ field: 'score', sort: 'desc' }] } }}
               sx={{
                 border: 'none',
                 '& .MuiDataGrid-row': { cursor: 'pointer' },
                 '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
+                '& .MuiDataGrid-row.eval-queued': { bgcolor: 'rgba(251, 191, 36, 0.07)' },
+                '& .MuiDataGrid-row.eval-queued:hover': { bgcolor: 'rgba(251, 191, 36, 0.13)' },
                 '& .MuiDataGrid-columnHeaders': { bgcolor: 'background.default' },
                 '& .MuiDataGrid-cell': { borderColor: 'divider' },
               }}

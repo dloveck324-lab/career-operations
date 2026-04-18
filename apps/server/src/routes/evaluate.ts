@@ -64,6 +64,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
 
     const modelOverride = body.model ? MODEL_MAP[body.model] : undefined
     pauseRequested = false
+    broadcastEvalEvent({ type: 'eval_queued', jobIds: jobs.map(j => j.id) })
 
     ;(async () => {
       let done = 0
