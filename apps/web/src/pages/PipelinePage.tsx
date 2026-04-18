@@ -339,11 +339,34 @@ export function PipelinePage() {
   const [search, setSearch] = useState('')
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>([])
   const [bulkLoading, setBulkLoading] = useState<string | null>(null)
+  const [skipMenuAnchor, setSkipMenuAnchor] = useState<HTMLElement | null>(null)
   const [evaluatingJobId, setEvaluatingJobId] = useState<number | null>(null)
   const [evalQueueIds, setEvalQueueIds] = useState<Set<number>>(new Set())
+  const [autofillActiveIds, setAutofillActiveIds] = useState<Set<number>>(new Set())
   const [positiveKeywords, setPositiveKeywords] = useState<string[]>([])
 
   const selectedIds = selectionModel as number[]
+
+  // Poll active autofill runs; drop any that have finished, and refresh tabs when done
+  useEffect(() => {
+    if (autofillActiveIds.size === 0) return
+    const int = setInterval(async () => {
+      const ids = Array.from(autofillActiveIds)
+      const results = await Promise.all(ids.map(id => api.applyRun(id).catch(() => null)))
+      const stillActive = new Set<number>()
+      let anyFinished = false
+      results.forEach((res, i) => {
+        const s = res?.run?.status
+        if (s === 'running' || s === 'queued') stillActive.add(ids[i])
+        else anyFinished = true
+      })
+      if (stillActive.size !== autofillActiveIds.size) {
+        setAutofillActiveIds(stillActive)
+        if (anyFinished) { void loadJobs(); void loadStats() }
+      }
+    }, 4000)
+    return () => clearInterval(int)
+  }, [autofillActiveIds])
 
   useEffect(() => {
     api.settings.automation().then(cfg => {
@@ -526,23 +549,51 @@ export function PipelinePage() {
     }
   }
 
+  const handleSkipUnder = async (threshold: number) => {
+    setSkipMenuAnchor(null)
+    const toSkip = jobs.filter(j => (j.score ?? 0) < threshold).map(j => j.id)
+    if (toSkip.length === 0) return
+    setBulkLoading(`skip-under-${threshold}`)
+    try {
+      await api.bulkStatus(toSkip, 'skipped')
+      await Promise.all([loadJobs(), loadStats()])
+    } finally {
+      setBulkLoading(null)
+    }
+  }
+
   const bulkActions: BulkAction[] = useMemo(() => {
+    const autoApply: BulkAction = {
+      label: 'Auto Apply', color: 'primary', fn: async ids => {
+        const res = await api.applyBulk(ids, 'haiku', 3)
+        setAutofillActiveIds(prev => {
+          const n = new Set(prev); res.runs.forEach(r => n.add(r.jobId)); return n
+        })
+        return res
+      },
+    }
     switch (tab) {
       case 0: return [
-        { label: 'Evaluate',    color: 'warning', fn: ids => api.evaluate({ ids }) },
-        { label: 'Skip',        color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Evaluate', color: 'warning', fn: ids => api.evaluate({ ids }) },
+        { label: 'Skip',     color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
       ]
       case 1: return [
-        { label: 'Re-evaluate',  color: 'warning', fn: ids => api.evaluate({ ids }) },
+        autoApply,
+        { label: 'Re-evaluate',   color: 'warning', fn: ids => api.evaluate({ ids }) },
         { label: 'Back to Inbox', color: 'primary', fn: ids => api.requeue(ids) },
-        { label: 'Applied',      color: 'success', fn: ids => api.bulkStatus(ids, 'applied') },
-        { label: 'Skip',         color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Applied',       color: 'success', fn: ids => api.bulkStatus(ids, 'applied') },
+        { label: 'Skip',          color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
       ]
       case 2: return [
+        autoApply,
+        { label: 'Applied', color: 'success', fn: ids => api.bulkStatus(ids, 'applied') },
+        { label: 'Skip',    color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+      ]
+      case 3: return [
         { label: 'Interview', color: 'warning', fn: ids => api.bulkStatus(ids, 'interview') },
         { label: 'Skip',      color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
       ]
-      case 3: return [
+      case 4: return [
         { label: 'Completed', color: 'success', fn: ids => api.bulkStatus(ids, 'completed') },
         { label: 'Skip',      color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
       ]
@@ -774,6 +825,34 @@ export function PipelinePage() {
                 }}
                 sx={{ '& .MuiOutlinedInput-root': { fontSize: '0.85rem' } }}
               />
+              {tab === 1 && (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    endIcon={bulkLoading?.startsWith('skip-under') ? <CircularProgress size={12} color="inherit" /> : <ArrowDropDown />}
+                    disabled={!!bulkLoading}
+                    onClick={e => setSkipMenuAnchor(e.currentTarget)}
+                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                  >
+                    Skip…
+                  </Button>
+                  <Menu
+                    anchorEl={skipMenuAnchor}
+                    open={Boolean(skipMenuAnchor)}
+                    onClose={() => setSkipMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  >
+                    {[1.0, 2.0, 2.5, 3.0, 3.4].map(t => (
+                      <MenuItem key={t} onClick={() => handleSkipUnder(t)} dense>
+                        All scores under {t.toFixed(1)}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </>
+              )}
             </Box>
           )}
 
