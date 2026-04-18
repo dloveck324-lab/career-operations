@@ -435,10 +435,7 @@ export function PipelinePage() {
             <Typography variant="h4" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {greeting}, {firstName}!
             </Typography>
-            <Typography
-              variant="body2"
-              sx={{ color: 'text.secondary', mt: 0.75, maxWidth: 560, lineHeight: 1.5 }}
-            >
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.75 }}>
               {wittyMessage}
             </Typography>
           </Box>
@@ -451,17 +448,19 @@ export function PipelinePage() {
                 startIcon={scanning ? <CircularProgress size={14} color="inherit" /> : <Search />}
                 onClick={handleScan}
                 disabled={scanning || evaluating}
-                sx={{ minWidth: 90 }}
+                sx={{ minWidth: 110 }}
               >
                 {scanning ? 'Scanning' : 'Scan'}
               </Button>
-              {scanning && (
-                <Tooltip title="Pause after current phase">
-                  <Button onClick={handlePauseScan} color="warning" sx={{ px: 1 }}>
-                    <Pause fontSize="small" />
-                  </Button>
-                </Tooltip>
-              )}
+              <Tooltip title="Pause after current phase">
+                <Button
+                  onClick={handlePauseScan}
+                  color="warning"
+                  sx={{ px: 1, visibility: scanning ? 'visible' : 'hidden', width: 32 }}
+                >
+                  <Pause fontSize="small" />
+                </Button>
+              </Tooltip>
             </ButtonGroup>
 
             {/* EVALUATE */}
