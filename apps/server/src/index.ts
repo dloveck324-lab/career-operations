@@ -7,9 +7,9 @@ import { evaluateRoutes } from './routes/evaluate.js'
 import { settingsRoutes } from './routes/settings.js'
 import { applyRoutes } from './routes/apply.js'
 import { portalsRoutes } from './routes/portals.js'
-import { configExists } from '@job-pipeline/core'
+import { configExists, loadProfile } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
-import { getTokenUsage } from './db/queries.js'
+import { getTokenUsage, seedFieldMappingsFromProfile } from './db/queries.js'
 import { scheduler } from './automation/scheduler.js'
 import { onScanComplete } from './routes/scan.js'
 
@@ -60,6 +60,13 @@ if (!cfg.profile || !cfg.cv || !cfg.filters) {
   ].filter(Boolean)
   console.log(`Imported: ${parts.join(', ') || 'nothing new'}`)
   if (result.warnings.length) console.warn('Import warnings:', result.warnings)
+}
+
+// Seed field mappings from profile on every startup (INSERT OR IGNORE — never overwrites user edits)
+const profile = loadProfile()
+if (profile) {
+  const seeded = seedFieldMappingsFromProfile(profile)
+  if (seeded > 0) console.log(`Seeded ${seeded} field mappings from profile`)
 }
 
 const PORT = Number(process.env.PORT ?? 3001)

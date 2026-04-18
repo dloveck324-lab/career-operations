@@ -1,6 +1,7 @@
 import { db, type Job, type JobStatus } from './schema.js'
 export type { JobStatus }
 import { createHash } from 'crypto'
+import type { ProfileConfig } from '@job-pipeline/core'
 
 export function hashText(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16)
@@ -105,6 +106,68 @@ export function saveFieldMapping(questionText: string, answer: string, atsType?:
 
 export function getFieldMappings() {
   return db.prepare('SELECT * FROM field_mappings ORDER BY use_count DESC').all()
+}
+
+export function saveFieldMappingIfMissing(questionText: string, answer: string, atsType?: string): boolean {
+  if (!answer) return false
+  const hash = hashText(questionText.toLowerCase().trim())
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO field_mappings (question_hash, question_text, answer, ats_type)
+    VALUES (?, ?, ?, ?)
+  `).run(hash, questionText, answer, atsType ?? null)
+  return result.changes > 0
+}
+
+export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
+  const p = profile.candidate
+  const nameParts = p.full_name.trim().split(/\s+/)
+  const firstName = nameParts[0] ?? ''
+  const lastName = nameParts.slice(1).join(' ')
+
+  const mappings: Array<[string, string]> = [
+    ['Full Name', p.full_name],
+    ['Name', p.full_name],
+    ['Your Name', p.full_name],
+    ['Applicant Name', p.full_name],
+    ['First Name', firstName],
+    ['Last Name', lastName],
+    ['Email', p.email],
+    ['Email Address', p.email],
+    ['Your Email', p.email],
+    ...(p.phone ? [
+      ['Phone', p.phone] as [string, string],
+      ['Phone Number', p.phone] as [string, string],
+      ['Mobile Number', p.phone] as [string, string],
+      ['Mobile Phone', p.phone] as [string, string],
+    ] : []),
+    ...(p.location ? [
+      ['Location', p.location] as [string, string],
+      ['City, State', p.location] as [string, string],
+    ] : []),
+    ...(p.linkedin ? [
+      ['LinkedIn', p.linkedin] as [string, string],
+      ['LinkedIn URL', p.linkedin] as [string, string],
+      ['LinkedIn Profile', p.linkedin] as [string, string],
+      ['LinkedIn Profile URL', p.linkedin] as [string, string],
+    ] : []),
+    ...(p.portfolio_url ? [
+      ['Portfolio', p.portfolio_url] as [string, string],
+      ['Portfolio URL', p.portfolio_url] as [string, string],
+      ['Website', p.portfolio_url] as [string, string],
+      ['Personal Website', p.portfolio_url] as [string, string],
+    ] : []),
+    ...(p.github ? [
+      ['GitHub', p.github] as [string, string],
+      ['GitHub URL', p.github] as [string, string],
+      ['GitHub Profile', p.github] as [string, string],
+    ] : []),
+  ]
+
+  let seeded = 0
+  for (const [question, answer] of mappings) {
+    if (saveFieldMappingIfMissing(question, answer, 'profile')) seeded++
+  }
+  return seeded
 }
 
 // ── Scan Runs ─────────────────────────────────────────────────────────────────

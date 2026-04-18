@@ -91,6 +91,15 @@ export async function settingsRoutes(app: FastifyInstance) {
     return getFieldMappings()
   })
 
+  app.post('/settings/field-mappings/seed', async () => {
+    const { seedFieldMappingsFromProfile } = await import('../db/queries.js')
+    const { loadProfile } = await import('@job-pipeline/core')
+    const profile = loadProfile()
+    if (!profile) return { ok: false, seeded: 0, message: 'Profile not found' }
+    const seeded = seedFieldMappingsFromProfile(profile)
+    return { ok: true, seeded }
+  })
+
   app.delete('/settings/field-mappings/:id', async (req) => {
     const { id } = req.params as { id: string }
     const { db } = await import('../db/schema.js')

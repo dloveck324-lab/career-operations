@@ -86,6 +86,7 @@ export const api = {
     saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
     fieldMappings: () => req<unknown[]>('/settings/field-mappings'),
     deleteMapping: (id: number) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'DELETE' }),
+    seedMappings: () => req<{ ok: boolean; seeded: number }>('/settings/field-mappings/seed', { method: 'POST' }),
     automation: () => req<AutomationStatus>('/settings/automation'),
     saveAutomation: (data: AutomationConfig) => req<{ ok: boolean }>('/settings/automation', { method: 'PUT', body: JSON.stringify(data) }),
   },

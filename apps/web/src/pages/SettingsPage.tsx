@@ -244,10 +244,21 @@ function FieldMappingsTab() {
     id: number; question_text: string; answer: string; ats_type?: string; use_count: number
   }>>([])
   const [editing, setEditing] = useState<Record<number, string>>({})
+  const [seeding, setSeeding] = useState(false)
 
   const load = async () => {
     const data = await api.settings.fieldMappings()
     setMappings(data as typeof mappings)
+  }
+
+  const seedFromProfile = async () => {
+    setSeeding(true)
+    try {
+      await api.settings.seedMappings()
+      await load()
+    } finally {
+      setSeeding(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -268,10 +279,22 @@ function FieldMappingsTab() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="body2" color="text.secondary">
-        Cached answers for application form fields. Built automatically as you apply to jobs.
-        Edit incorrect answers inline or delete to force a fresh Claude response next time.
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="body2" color="text.secondary">
+          Cached answers for application form fields. Pre-seeded from your profile; grows automatically as you apply.
+          Edit incorrect answers inline or delete to force a fresh Claude response.
+        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={seedFromProfile}
+          disabled={seeding}
+          sx={{ flexShrink: 0, ml: 2 }}
+        >
+          {seeding ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
+          Seed from Profile
+        </Button>
+      </Stack>
       <Divider />
       <Table size="small">
         <TableHead>
@@ -327,7 +350,7 @@ function FieldMappingsTab() {
             <TableRow>
               <TableCell colSpan={5}>
                 <Typography variant="caption" color="text.secondary">
-                  No mappings yet. They accumulate automatically as you apply to jobs.
+                  No mappings yet. Click "Seed from Profile" to pre-fill common fields.
                 </Typography>
               </TableCell>
             </TableRow>
