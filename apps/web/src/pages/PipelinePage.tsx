@@ -216,7 +216,11 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
 
   return (
     <Tooltip title={tip} arrow placement="bottom-end" slotProps={{ tooltip: { sx: { maxWidth: 160 } } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'default', px: 0.25 }}>
+      <Box sx={{
+        display: 'flex', alignItems: 'center', cursor: 'default',
+        bgcolor: 'rgba(255,255,255,0.06)', borderRadius: '50%',
+        p: '4px',
+      }}>
         <svg width={size} height={size} style={{ display: 'block' }}>
           {/* Gray background ring */}
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={sw} />
