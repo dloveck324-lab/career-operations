@@ -401,7 +401,11 @@ export function PipelinePage() {
   const handleScan = async () => {
     setScanning(true)
     setScanToast({ text: 'Starting scan...', severity: 'info' })
-    try { await api.scan() } catch (err) { setScanning(false); setScanToast({ text: `Scan failed: ${err}`, severity: 'warning' }) }
+    try {
+      await api.scan()
+      // Fallback: if SSE 'start' event hasn't arrived yet (e.g. SSE reconnecting after hot-reload), update directly
+      setScanToast(prev => prev?.text === 'Starting scan...' ? { text: 'Scanning portals...', severity: 'info' } : prev)
+    } catch (err) { setScanning(false); setScanToast({ text: `Scan failed: ${err}`, severity: 'warning' }) }
   }
 
   const handlePauseScan = async () => {
