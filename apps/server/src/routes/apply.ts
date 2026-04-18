@@ -114,15 +114,22 @@ export async function applyRoutes(app: FastifyInstance) {
     }
   })
 
-  /** Inject a user message into an active run's Claude session. */
+  /**
+   * Inject a user message. If the run is still running, it's piped to the
+   * live Claude child via stdin. If it has finished but we have the
+   * sessionId, we spawn a fresh `claude --resume` one-shot so you can keep
+   * chatting about the same application session after the fact.
+   */
   app.post('/apply/runs/:runId/message', async (req) => {
     const { runId } = req.params as { runId: string }
     const body = z.object({ text: z.string().min(1) }).parse(req.body)
     const run = runRegistry.get(runId)
     if (!run) throw app.httpErrors.notFound('Run not found')
-    if (run.status !== 'running') throw app.httpErrors.badRequest(`Run is ${run.status}`)
     const ok = runRegistry.sendMessage(runId, body.text)
-    if (!ok) throw app.httpErrors.badRequest('Failed to write to run stdin')
+    if (!ok) {
+      if (!run.sessionId) throw app.httpErrors.badRequest('No session id to resume — run a fresh Auto Fill first')
+      throw app.httpErrors.badRequest(`Run is ${run.status} and not resumable`)
+    }
     return { ok: true }
   })
 

@@ -303,6 +303,16 @@ ${cv ? cv.slice(0, 5000) : '(no CV provided)'}
 \`bash ${QUICKFILL_SCRIPT} '[{"ref":"e3","value":"Vinicius"},{"ref":"#email","value":"x@y.com"}]'\`
 Pass every plain text/email/URL/phone field in one call. Far fewer turns than individual \`pinchtab fill\`s.
 
+### Location autocompletes (Ashby, Greenhouse, Lever are all similar)
+Location fields usually LOOK like a text input but are actually a combobox that only commits the value once you click a suggestion from a dropdown that appears mid-typing. \`pinchtab fill\` alone won't work. The reliable pattern:
+1. \`pinchtab click <ref of the location input>\` to focus it.
+2. \`pinchtab type <ref> "<first few chars of the city>"\` (e.g. "San Franci") — this fires keystroke events the widget listens for. DO NOT use \`fill\` here.
+3. \`pinchtab snap -i -c\` — the dropdown options now appear as new refs.
+4. \`pinchtab click <ref of the matching option>\` (exact text match like "San Francisco, CA, United States").
+5. Re-snap to confirm the value stuck.
+
+If \`type\` still doesn't open the dropdown (rare but happens on fancy React inputs), fall back to \`pinchtab eval\` and dispatch an \`input\` event manually, e.g. \`pt eval "(() => { const el = document.querySelector('input[name=location]'); el.focus(); el.value='San Francisco'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"\` then re-snap and click the option.
+
 ## Your task (follow this order exactly)
 1. If the current tab isn't already on the application form, navigate or click "Apply".
 2. \`pinchtab snap -i -c\` to map every interactive element.

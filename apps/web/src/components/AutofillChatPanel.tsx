@@ -27,6 +27,7 @@ export function AutofillChatPanel({ runId }: Props) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<'queued' | 'running' | 'done' | 'failed' | 'cancelled'>('queued')
+  const [hasSession, setHasSession] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
@@ -39,6 +40,7 @@ export function AutofillChatPanel({ runId }: Props) {
         setEvents(prev => [...prev, { id: prev.length, kind, ts: (payload.ts as number) ?? Date.now(), data: payload }])
         if (kind === 'status' && typeof payload.status === 'string') setStatus(payload.status as typeof status)
         if (kind === 'done') setStatus(prev => (prev === 'running' ? 'done' : prev))
+        if (kind === 'session' && typeof payload.sessionId === 'string') setHasSession(true)
       } catch { /* ignore */ }
     }
 
@@ -57,10 +59,11 @@ export function AutofillChatPanel({ runId }: Props) {
 
   const prompt = useMemo(() => events.find(e => e.kind === 'prompt')?.data.text as string | undefined, [events])
   const isRunning = status === 'running' || status === 'queued'
+  const canSend = isRunning || hasSession  // can chat post-hoc via --resume
 
   const handleSend = async () => {
     const text = input.trim()
-    if (!text || sending || !isRunning) return
+    if (!text || sending || !canSend) return
     setSending(true)
     try {
       await api.applySendMessage(runId, text)
@@ -125,7 +128,11 @@ export function AutofillChatPanel({ runId }: Props) {
         <TextField
           size="small"
           fullWidth
-          placeholder={isRunning ? 'Ask Claude about this run…' : 'Run ended — messages disabled'}
+          placeholder={
+            isRunning ? 'Ask Claude about this run…' :
+            canSend  ? 'Resume this session — ask a follow-up, request a fix…' :
+            'No session id to resume'
+          }
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => {
@@ -134,12 +141,12 @@ export function AutofillChatPanel({ runId }: Props) {
               void handleSend()
             }
           }}
-          disabled={!isRunning || sending}
+          disabled={!canSend || sending}
           multiline
           maxRows={4}
           sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
         />
-        <IconButton onClick={() => void handleSend()} disabled={!input.trim() || !isRunning || sending} size="small">
+        <IconButton onClick={() => void handleSend()} disabled={!input.trim() || !canSend || sending} size="small">
           {sending ? <CircularProgress size={16} /> : <Send fontSize="small" />}
         </IconButton>
       </Stack>

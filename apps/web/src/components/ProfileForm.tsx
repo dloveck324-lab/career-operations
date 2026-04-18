@@ -14,8 +14,16 @@ interface Archetype { name: string; level: string; fit: string }
 interface ProofPoint { name: string; url: string; hero_metric: string }
 interface ArchetypeKeywords { [slug: string]: string[] }
 
+interface Candidate {
+  full_name: string; email: string; phone: string; location: string; linkedin: string; portfolio_url: string; github: string
+  // Application defaults (optional) — used by Auto Fill for screening/demographic questions.
+  gender: string; pronouns: string; race_ethnicity: string; veteran_status: string; disability_status: string
+  work_authorization: string; requires_sponsorship: string
+  current_company: string; years_of_experience: string; how_did_you_hear: string
+}
+
 interface Profile {
-  candidate: { full_name: string; email: string; phone: string; location: string; linkedin: string; portfolio_url: string; github: string }
+  candidate: Candidate
   target_roles: { primary: string[]; archetypes: Archetype[] }
   narrative: { headline: string; exit_story: string; superpowers: string[]; proof_points: ProofPoint[] }
   compensation: { target_range: string; currency: string; minimum: string; location_flexibility: string }
@@ -30,7 +38,12 @@ interface Profile {
 }
 
 const EMPTY: Profile = {
-  candidate: { full_name: '', email: '', phone: '', location: '', linkedin: '', portfolio_url: '', github: '' },
+  candidate: {
+    full_name: '', email: '', phone: '', location: '', linkedin: '', portfolio_url: '', github: '',
+    gender: '', pronouns: '', race_ethnicity: '', veteran_status: '', disability_status: '',
+    work_authorization: '', requires_sponsorship: '',
+    current_company: '', years_of_experience: '', how_did_you_hear: '',
+  },
   target_roles: { primary: [], archetypes: [] },
   narrative: { headline: '', exit_story: '', superpowers: [], proof_points: [] },
   compensation: { target_range: '', currency: 'USD', minimum: '', location_flexibility: '' },
@@ -121,6 +134,50 @@ export function ProfileForm() {
           <TextField label="GitHub" value={profile.candidate.github} onChange={e => setCandidate('github', e.target.value)} fullWidth size="small" placeholder="github.com/..." />
         </Stack>
         <TextField label="Portfolio / Website" value={profile.candidate.portfolio_url} onChange={e => setCandidate('portfolio_url', e.target.value)} size="small" />
+      </Stack>
+
+      {/* ── Application Defaults ── */}
+      <Stack spacing={2}>
+        <SectionHeader
+          title="Application Defaults"
+          description="Answers Auto Fill pre-seeds into the field-mapping cache so you stop typing them on every form. Leave any field blank to let the agent ask/skip it."
+        />
+        <Stack direction="row" spacing={2}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Authorized to work (country of the role)</InputLabel>
+            <Select label="Authorized to work (country of the role)" value={profile.candidate.work_authorization} onChange={e => setCandidate('work_authorization', e.target.value)}>
+              <MenuItem value="">(ask)</MenuItem>
+              <MenuItem value="Yes">Yes</MenuItem>
+              <MenuItem value="No">No</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Require visa sponsorship?</InputLabel>
+            <Select label="Require visa sponsorship?" value={profile.candidate.requires_sponsorship} onChange={e => setCandidate('requires_sponsorship', e.target.value)}>
+              <MenuItem value="">(ask)</MenuItem>
+              <MenuItem value="No">No</MenuItem>
+              <MenuItem value="Yes">Yes</MenuItem>
+            </Select>
+          </FormControl>
+        </Stack>
+        <Stack direction="row" spacing={2}>
+          <TextField label="Current company" value={profile.candidate.current_company} onChange={e => setCandidate('current_company', e.target.value)} size="small" fullWidth />
+          <TextField label="Years of experience" value={profile.candidate.years_of_experience} onChange={e => setCandidate('years_of_experience', e.target.value)} size="small" fullWidth placeholder="e.g. 8" />
+        </Stack>
+        <TextField label="How did you hear about us? (default answer)" value={profile.candidate.how_did_you_hear} onChange={e => setCandidate('how_did_you_hear', e.target.value)} size="small" fullWidth placeholder="e.g. LinkedIn" />
+
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>Demographics (optional, used for self-ID screens)</Typography>
+        <Stack direction="row" spacing={2}>
+          <TextField label="Gender" value={profile.candidate.gender} onChange={e => setCandidate('gender', e.target.value)} size="small" fullWidth placeholder="e.g. Male / Female / Non-binary / Decline to self-identify" />
+          <TextField label="Pronouns" value={profile.candidate.pronouns} onChange={e => setCandidate('pronouns', e.target.value)} size="small" fullWidth placeholder="e.g. he/him" />
+        </Stack>
+        <Stack direction="row" spacing={2}>
+          <TextField label="Race / Ethnicity" value={profile.candidate.race_ethnicity} onChange={e => setCandidate('race_ethnicity', e.target.value)} size="small" fullWidth placeholder="e.g. White / Hispanic or Latino / Decline to self-identify" />
+        </Stack>
+        <Stack direction="row" spacing={2}>
+          <TextField label="Veteran status" value={profile.candidate.veteran_status} onChange={e => setCandidate('veteran_status', e.target.value)} size="small" fullWidth placeholder="e.g. I am not a protected veteran" />
+          <TextField label="Disability status" value={profile.candidate.disability_status} onChange={e => setCandidate('disability_status', e.target.value)} size="small" fullWidth placeholder="e.g. No, I do not have a disability" />
+        </Stack>
       </Stack>
 
       {/* ── Target Roles ── */}

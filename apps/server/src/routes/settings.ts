@@ -171,6 +171,14 @@ export async function settingsRoutes(app: FastifyInstance) {
         writeFileSync(cvPath, patchCvContact(readFileSync(cvPath, 'utf-8'), candidate))
       }
     } catch {}
+    // Re-seed field mappings so any newly-filled demographic/auth fields are
+    // immediately available to Auto Fill without waiting for the next boot.
+    try {
+      const { loadProfile } = await import('@job-pipeline/core')
+      const { seedFieldMappingsFromProfile } = await import('../db/queries.js')
+      const p = loadProfile()
+      if (p) seedFieldMappingsFromProfile(p)
+    } catch { /* non-fatal */ }
     return { ok: true }
   })
 

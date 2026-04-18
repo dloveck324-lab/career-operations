@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto'
-import type { ChildProcessWithoutNullStreams } from 'child_process'
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import type { AutofillModel } from './autofill.js'
+
+const MODEL_IDS: Record<AutofillModel, string> = {
+  haiku: 'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-7',
+}
 
 export type RunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
@@ -134,23 +140,91 @@ export class RunRegistry {
   }
 
   /**
-   * Inject a user message into the running claude child via stream-json stdin.
-   * Returns true if the message was written, false if the child is not writable.
+   * Inject a user message. If the claude child is still alive, pipe it via
+   * stdin (live, single-session). If the run has already finished, spawn a
+   * fresh `claude -p --resume <sessionId>` one-shot and bridge its stream-json
+   * output back into this run's event stream so the UI feels continuous.
    */
   sendMessage(runId: string, text: string): boolean {
     const run = this.runs.get(runId)
-    if (!run?.child?.stdin?.writable) return false
-    const payload = {
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text }] },
+    if (!run) return false
+
+    // Live path — write to running child's stdin
+    if (run.child?.stdin?.writable && run.status === 'running') {
+      const payload = { type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } }
+      try {
+        run.child.stdin.write(JSON.stringify(payload) + '\n')
+        this.publish(runId, 'user', { text })
+        return true
+      } catch {
+        return false
+      }
     }
-    try {
-      run.child.stdin.write(JSON.stringify(payload) + '\n')
-      this.publish(runId, 'user', { text })
-      return true
-    } catch {
-      return false
-    }
+
+    // Post-hoc path — spawn claude --resume <sessionId> one-shot
+    if (!run.sessionId) return false
+    this.publish(runId, 'user', { text })
+    this.spawnFollowup(runId, text)
+    return true
+  }
+
+  private spawnFollowup(runId: string, text: string): void {
+    const run = this.runs.get(runId)
+    if (!run?.sessionId) return
+
+    const child = spawn('claude', [
+      '-p', text,
+      '--resume', run.sessionId,
+      '--model', MODEL_IDS[run.model],
+      '--dangerously-skip-permissions',
+      '--verbose',
+      '--output-format', 'stream-json',
+    ], {
+      env: { ...process.env, ...(run.tabId ? { PINCHTAB_TAB: run.tabId } : {}) },
+    })
+
+    let buf = ''
+    child.stdout.on('data', (chunk: Buffer) => {
+      buf += chunk.toString()
+      let nl
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim()
+        buf = buf.slice(nl + 1)
+        if (!line) continue
+        try {
+          const ev = JSON.parse(line) as {
+            type?: string
+            message?: { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }
+            result?: string
+          }
+          if (ev.type === 'assistant' && ev.message?.content) {
+            for (const c of ev.message.content) {
+              if (c.type === 'text' && c.text?.trim()) {
+                this.publish(runId, 'thinking', { text: c.text })
+              }
+              if (c.type === 'tool_use') {
+                const input = c.input ?? {}
+                let hint = ''
+                if (typeof input.command === 'string') hint = input.command.slice(0, 200)
+                else if (typeof input.url === 'string') hint = input.url
+                this.publish(runId, 'tool', { name: c.name, hint, input })
+              }
+            }
+          } else if (ev.type === 'result' && ev.result) {
+            this.publish(runId, 'result', { text: ev.result })
+          }
+        } catch { /* non-JSON */ }
+      }
+    })
+
+    child.stderr.on('data', (c: Buffer) => {
+      const msg = c.toString().trim().slice(0, 400)
+      if (msg) this.publish(runId, 'error', { source: 'stderr', message: msg })
+    })
+
+    child.on('error', (err) => {
+      this.publish(runId, 'error', { message: `follow-up spawn failed: ${err.message}` })
+    })
   }
 
   /**
@@ -189,10 +263,11 @@ export class RunRegistry {
   }
 
   /**
-   * Prune finished runs older than the given age (default 30 min) to keep
-   * the registry from growing unbounded. Called opportunistically.
+   * Prune finished runs older than the given age (default 24h) so users can
+   * still open the drawer on applications they completed today and keep
+   * chatting to Claude about them. Called opportunistically.
    */
-  prune(maxAgeMs = 30 * 60 * 1000): void {
+  prune(maxAgeMs = 24 * 60 * 60 * 1000): void {
     const now = Date.now()
     for (const [id, run] of this.runs.entries()) {
       if (run.status === 'running' || run.status === 'queued') continue
