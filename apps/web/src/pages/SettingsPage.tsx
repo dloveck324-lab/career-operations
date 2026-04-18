@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import {
   Box, Tabs, Tab, Typography, Paper, Stack, Chip, IconButton,
   Table, TableBody, TableCell, TableHead, TableRow,
-  TextField, Divider, Switch, Button, CircularProgress,
+  TextField, Divider, Switch, Button, CircularProgress, Fab, Tooltip,
   ToggleButtonGroup, ToggleButton, Alert,
 } from '@mui/material'
-import { Delete, CheckCircle, Error, AlarmOn, ArrowBack } from '@mui/icons-material'
+import { Delete, CheckCircle, Error, AlarmOn, ArrowBack, Save } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
@@ -223,18 +223,24 @@ function AutomationTab() {
         </Stack>
       </Paper>
 
-      <Stack direction="row" justifyContent="flex-end">
-        <Button
-          variant="contained"
-          onClick={save}
-          disabled={saving}
-          startIcon={saving
-            ? <CircularProgress size={14} color="inherit" />
-            : saved ? <CheckCircle sx={{ fontSize: 16 }} /> : undefined}
-        >
-          {saved ? 'Saved' : 'Save'}
-        </Button>
-      </Stack>
+      <Tooltip title={saved ? 'Saved' : 'Save changes'} placement="left">
+        <span>
+          <Fab
+            color={saved ? 'success' : 'primary'}
+            onClick={save}
+            disabled={saving}
+            variant="extended"
+            size="medium"
+            sx={{ position: 'fixed', bottom: 32, right: 32, zIndex: 1300, gap: 1 }}
+          >
+            {saving
+              ? <CircularProgress size={22} color="inherit" />
+              : saved ? <CheckCircle /> : <Save />}
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
+          </Fab>
+        </span>
+      </Tooltip>
+      <Stack sx={{ pb: 10 }} />
     </Stack>
   )
 }
