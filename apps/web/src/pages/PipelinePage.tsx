@@ -371,17 +371,26 @@ export function PipelinePage() {
       if (evt.type === 'start') { setScanning(true); setScanToast({ text: 'Scanning portals...', severity: 'info' }) }
       if (evt.type === 'progress') {
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setScanToast({ text: `re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}${evt.company ? ` · ${evt.company}` : ''}`, severity: 'info' })
+        const re = String(evt.existing ?? 0).padStart(4, '0')
+        const nw = String(evt.added ?? 0).padStart(2, '0')
+        const cl = String(closed).padStart(2, '0')
+        setScanToast({ text: `re-scan: ${re} · new: ${nw} · closed: ${cl}${evt.company ? ` · ${evt.company}` : ''}`, severity: 'info' })
       }
       if (evt.type === 'done') {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setScanToast({ text: `Done — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'success' })
+        const re = String(evt.existing ?? 0).padStart(4, '0')
+        const nw = String(evt.added ?? 0).padStart(2, '0')
+        const cl = String(closed).padStart(2, '0')
+        setScanToast({ text: `Done — re-scan: ${re} · new: ${nw} · closed: ${cl}`, severity: 'success' })
       }
       if (evt.type === 'scan_paused') {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setScanToast({ text: `Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'warning' })
+        const re = String(evt.existing ?? 0).padStart(4, '0')
+        const nw = String(evt.added ?? 0).padStart(2, '0')
+        const cl = String(closed).padStart(2, '0')
+        setScanToast({ text: `Paused — re-scan: ${re} · new: ${nw} · closed: ${cl}`, severity: 'warning' })
       }
       if (evt.type === 'eval_queued' && evt.jobIds) { setEvalQueueIds(new Set(evt.jobIds)) }
       if (evt.type === 'eval_start') { setEvaluating(true); setEvalToast({ text: `Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`, severity: 'info' }) }
@@ -799,8 +808,8 @@ export function PipelinePage() {
         onStatusChange={() => { loadJobs(); loadStats() }}
       />
 
-      <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert severity={scanToast?.severity ?? 'info'} variant="filled" onClose={() => setScanToast(null)} sx={{ minWidth: 280 }}>
+      <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+        <Alert severity={scanToast?.severity ?? 'info'} variant="filled" onClose={() => setScanToast(null)} sx={{ minWidth: 280, fontVariantNumeric: 'tabular-nums' }}>
           {scanToast?.text}
         </Alert>
       </Snackbar>
