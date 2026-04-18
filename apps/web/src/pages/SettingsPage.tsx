@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
-  Box, Tabs, Tab, Typography, Paper, Stack, Chip,
-  Table, TableBody, TableCell, TableHead, TableRow, IconButton,
+  Box, Tabs, Tab, Typography, Paper, Stack, Chip, IconButton,
+  Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Divider, Switch, Button, CircularProgress,
   ToggleButtonGroup, ToggleButton, Alert,
 } from '@mui/material'
-import { Delete, CheckCircle, Error, AlarmOn } from '@mui/icons-material'
+import { Delete, CheckCircle, Error, AlarmOn, ArrowBack } from '@mui/icons-material'
+import { useNavigate } from 'react-router-dom'
 import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
 import { PortalsForm } from '../components/PortalsForm.js'
@@ -13,6 +14,7 @@ import { FiltersForm } from '../components/FiltersForm.js'
 import { CvForm } from '../components/CvForm.js'
 
 export function SettingsPage() {
+  const navigate = useNavigate()
   const [tab, setTab] = useState(0)
   const [status, setStatus] = useState<{
     pinchtab: { ok: boolean; message?: string }
@@ -26,10 +28,13 @@ export function SettingsPage() {
   return (
     <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
       <Stack direction="row" spacing={2} alignItems="center" mb={3}>
+        <IconButton size="small" onClick={() => navigate('/pipeline')} sx={{ color: 'text.secondary' }}>
+          <ArrowBack fontSize="small" />
+        </IconButton>
         <Typography variant="h6">Settings</Typography>
         <Stack direction="row" spacing={1}>
           <StatusBadge ok={status?.pinchtab.ok} label="PinchTab" hint={status?.pinchtab.message ?? 'pinchtab daemon install'} />
-          <StatusBadge ok={status?.claude.ok} label={`Claude CLI${status?.claude.path ? ` (${status.claude.path})` : ''}`} hint={status?.claude.message ?? 'claude not in PATH'} />
+          <StatusBadge ok={status?.claude.ok} label="Claude CLI" hint={status?.claude.message ?? 'claude not in PATH'} />
         </Stack>
       </Stack>
 
