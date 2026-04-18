@@ -317,8 +317,8 @@ export function PipelinePage() {
   const [evalCompany, setEvalCompany] = useState<string | null>(null)
   const [companies, setCompanies] = useState<string[]>([])
 
-  // Scan result toast
-  const [scanToast, setScanToast] = useState<{ added: number; existing: number; closed: number; paused: boolean } | null>(null)
+  // Scan toast
+  const [scanToast, setScanToast] = useState<{ text: string; severity: 'info' | 'success' | 'warning' } | null>(null)
 
   // Automation badge
   const [autoScanLabel, setAutoScanLabel] = useState<string | null>(null)
@@ -362,22 +362,20 @@ export function PipelinePage() {
   useEffect(() => {
     const handler = (e: Event) => {
       const evt = (e as CustomEvent<ScanEvent>).detail
-      if (evt.type === 'start') { setScanning(true); setProgress('Scanning portals...') }
+      if (evt.type === 'start') { setScanning(true); setScanToast({ text: 'Scanning portals...', severity: 'info' }) }
       if (evt.type === 'progress') {
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setProgress(`re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}${evt.company ? ` · ${evt.company}` : ''}`)
+        setScanToast({ text: `re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}${evt.company ? ` · ${evt.company}` : ''}`, severity: 'info' })
       }
       if (evt.type === 'done') {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setProgress(`Done — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`)
-        setScanToast({ added: evt.added ?? 0, existing: evt.existing ?? 0, closed, paused: false })
+        setScanToast({ text: `Done — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'success' })
       }
       if (evt.type === 'scan_paused') {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        setProgress(`Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`)
-        setScanToast({ added: evt.added ?? 0, existing: evt.existing ?? 0, closed, paused: true })
+        setScanToast({ text: `Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'warning' })
       }
       if (evt.type === 'eval_start') { setEvaluating(true); setProgress(`Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`) }
       if (evt.type === 'eval_done') { setProgress(`Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`) }
@@ -392,12 +390,12 @@ export function PipelinePage() {
   // Scan handlers
   const handleScan = async () => {
     setScanning(true)
-    setProgress('Starting scan...')
-    try { await api.scan() } catch (err) { setScanning(false); setProgress(`Scan failed: ${err}`) }
+    setScanToast({ text: 'Starting scan...', severity: 'info' })
+    try { await api.scan() } catch (err) { setScanning(false); setScanToast({ text: `Scan failed: ${err}`, severity: 'warning' }) }
   }
 
   const handlePauseScan = async () => {
-    try { await api.pauseScan(); setProgress('Pausing after current phase...') } catch { /* ignore */ }
+    try { await api.pauseScan(); setScanToast({ text: 'Pausing after current phase...', severity: 'info' }) } catch { /* ignore */ }
   }
 
   // Evaluate handlers
@@ -796,17 +794,12 @@ export function PipelinePage() {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert
-          severity={scanToast?.paused ? 'warning' : 'success'}
+          severity={scanToast?.severity ?? 'info'}
           variant="filled"
           onClose={() => setScanToast(null)}
-          sx={{ minWidth: 280 }}
+          sx={{ minWidth: 280, alignItems: 'center' }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-            {scanToast?.paused ? 'Scan paused' : 'Scan complete'}
-          </Typography>
-          <Typography variant="body2">
-            {scanToast?.added ?? 0} new &nbsp;·&nbsp; {scanToast?.existing ?? 0} re-scanned &nbsp;·&nbsp; {scanToast?.closed ?? 0} closed
-          </Typography>
+          {scanToast?.text}
         </Alert>
       </Snackbar>
     </Box>
