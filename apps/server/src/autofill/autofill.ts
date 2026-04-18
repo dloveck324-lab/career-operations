@@ -26,7 +26,7 @@ export async function startAutofill(job: Job, opts: { headless?: boolean } = {})
   await client.navigate(job.url)
 
   const snap = await client.snap()
-  const inputs = snap.elements.filter(el => ['input', 'textarea', 'select'].includes(el.tag.toLowerCase()))
+  const inputs = (snap.elements ?? []).filter(el => ['input', 'textarea', 'select'].includes(el.tag.toLowerCase()))
 
   const filled: Array<{ ref: string; label: string; value: string }> = []
   const missing: Array<{ ref: string; label: string }> = []
