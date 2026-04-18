@@ -29,32 +29,35 @@ export async function startAutofill(job: Job, opts: { model?: AutofillModel } = 
   const started = Date.now()
   const client = new PinchTabClient()
 
+  console.log(`[autofill] start job=${job.id} model=${model} url=${job.url}`)
+
   if (!await client.isReachable()) {
+    console.error('[autofill] PinchTab not reachable')
     return { ok: false, model, durationMs: 0, message: 'PinchTab not reachable — run: pinchtab daemon install' }
   }
 
-  // Ensure a headed Chrome window is available; the agent will use the pinchtab CLI.
   try {
-    await client.ensureInstance('default', false)
+    const url = await client.ensureInstance('default', false)
+    console.log(`[autofill] headed Chrome ready at ${url}`)
   } catch (err) {
+    console.error('[autofill] ensureInstance failed:', err)
     return { ok: false, model, durationMs: 0, message: `PinchTab instance start failed: ${(err as Error).message}` }
   }
 
   const profile = loadProfile()
   const cv = loadCv()
   if (!profile) {
+    console.error('[autofill] no profile loaded')
     return { ok: false, model, durationMs: 0, message: 'No candidate profile loaded (config/profile.yml)' }
   }
 
   const prompt = buildAgentPrompt(job, profile, cv)
+  console.log(`[autofill] spawning claude (${MODEL_IDS[model]}), prompt=${prompt.length} chars`)
 
   const result = await runClaudeAgent(prompt, model)
-  return {
-    ok: result.ok,
-    model,
-    durationMs: Date.now() - started,
-    message: result.message,
-  }
+  const durationMs = Date.now() - started
+  console.log(`[autofill] done ok=${result.ok} in ${durationMs}ms — ${result.message.slice(0, 200)}`)
+  return { ok: result.ok, model, durationMs, message: result.message }
 }
 
 function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv: string | null): string {
@@ -113,12 +116,15 @@ async function runClaudeAgent(prompt: string, model: AutofillModel): Promise<{ o
     const stderrChunks: Buffer[] = []
     let settled = false
 
-    const child = spawn('claude', [
+    const args = [
       '-p', prompt,
       '--model', MODEL_IDS[model],
       '--dangerously-skip-permissions',
-      '--output-format', 'text',
-    ], { env: { ...process.env } })
+      '--verbose',
+      '--output-format', 'stream-json',
+    ]
+    const child = spawn('claude', args, { env: { ...process.env } })
+    console.log(`[autofill] claude pid=${child.pid}`)
 
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL') } catch { /* ignore */ }
@@ -128,8 +134,35 @@ async function runClaudeAgent(prompt: string, model: AutofillModel): Promise<{ o
       }
     }, CLAUDE_TIMEOUT_MS[model])
 
-    child.stdout.on('data', (c: Buffer) => stdoutChunks.push(c))
-    child.stderr.on('data', (c: Buffer) => stderrChunks.push(c))
+    let buf = ''
+    let finalText = ''
+    child.stdout.on('data', (c: Buffer) => {
+      stdoutChunks.push(c)
+      buf += c.toString()
+      let nl
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim()
+        buf = buf.slice(nl + 1)
+        if (!line) continue
+        try {
+          const ev = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type: string; text?: string; name?: string; input?: unknown }> }; subtype?: string; result?: string }
+          if (ev.type === 'assistant' && ev.message?.content) {
+            for (const c of ev.message.content) {
+              if (c.type === 'text' && c.text) finalText += c.text
+              if (c.type === 'tool_use') console.log(`[autofill] tool_use: ${c.name}`)
+            }
+          } else if (ev.type === 'result') {
+            if (ev.result) finalText = ev.result
+          } else if (ev.type === 'system') {
+            console.log(`[autofill] claude session started`)
+          }
+        } catch { /* non-JSON line */ }
+      }
+    })
+    child.stderr.on('data', (c: Buffer) => {
+      stderrChunks.push(c)
+      console.error(`[autofill stderr] ${c.toString().trim().slice(0, 400)}`)
+    })
 
     child.on('error', (err) => {
       clearTimeout(timer)
@@ -142,13 +175,13 @@ async function runClaudeAgent(prompt: string, model: AutofillModel): Promise<{ o
       clearTimeout(timer)
       if (settled) return
       settled = true
-      const stdout = Buffer.concat(stdoutChunks).toString().trim()
+      const stdoutText = Buffer.concat(stdoutChunks).toString()
       const stderr = Buffer.concat(stderrChunks).toString().trim()
       if (code !== 0) {
-        resolve({ ok: false, message: `Claude exited ${code}: ${stderr.slice(0, 400) || stdout.slice(0, 400)}` })
+        resolve({ ok: false, message: `Claude exited ${code}: ${stderr.slice(0, 400) || stdoutText.slice(0, 400)}` })
         return
       }
-      const summary = stdout.length > 0 ? stdout : '(no output)'
+      const summary = finalText.trim() || '(no output)'
       resolve({ ok: true, message: summary.slice(0, 2000) })
     })
   })

@@ -14,7 +14,7 @@ import { scheduler } from './automation/scheduler.js'
 import { onScanComplete } from './routes/scan.js'
 
 const app = Fastify({
-  logger: { level: 'warn' },
+  logger: { level: 'info' },
   // Autofill agent runs can last several minutes (Opus with multi-step forms).
   connectionTimeout: 20 * 60_000,
   requestTimeout: 20 * 60_000,
