@@ -65,36 +65,51 @@ function getGreeting(): string {
 }
 
 function getWittyMessage(): string {
-  const now = new Date()
-  const day = now.getDay()   // 0=Sun, 6=Sat
-  const hour = now.getHours()
+  const day = new Date().getDay()
+  const hour = new Date().getHours()
 
-  if (day === 0) return "It's Sunday. LinkedIn doesn't rest and neither do you. That's called a problem."
-  if (day === 6) return "It's Saturday — no hiring manager is looking at anything right now. Then again, every day kind of feels like Saturday now."
-  if (day === 5 && hour >= 15) return "Friday afternoon. Your applications have been placed in a queue that expires at 5 PM. As tradition dictates."
-  if (day === 5) return "It's Friday! The day no one processes applications. Maybe save your cover letter for Monday."
-  if (day === 1 && hour < 10) return "Monday morning. The recruiter who ghosted you 3 weeks ago just posted the same role again. Deep breaths."
-
-  if (hour < 6) return "Job hunting at this hour? Even the ATS is asleep. Bold strategy."
-  if (hour >= 22) return "Late night job board doomscrolling detected. LinkedIn is pleased. Your future self is not."
-
-  const messages = [
-    "Your 'perfect match' has been ghosting you for 3 weeks. Sure, apply to 5 more — can't hurt.",
-    "Today's forecast: 40% chance of rejection, 60% chance of being ignored entirely.",
+  const pool: string[] = [
+    // Generic — always in the pool
+    "Your 'perfect match' has been ghosting you for 3 weeks.",
+    "Today's forecast: 40% rejection, 60% radio silence.",
     "Your application is being reviewed by an algorithm that failed its own Turing test.",
-    "Position requires 3–5 years experience with a tool invented 18 months ago. The market is well.",
-    "The recruiter will reach out soon. (They won't. But the thought is nice.)",
-    "Your LinkedIn profile was viewed by someone who will not follow up. As is custom.",
-    "Another company posted 'urgent hiring!' for a role they already filled internally. Classic.",
-    "Good news: your resume made it past the ATS! Bad news: that's where the good news ends.",
-    "Somewhere a hiring manager is reading your cover letter. Just kidding — no one reads those.",
-    "Entry level position. Requires senior mindset, principal-level output, and 10 years experience. Pays in 'exposure'.",
+    "Position requires 3–5 years experience with a tool invented 18 months ago.",
+    "The recruiter will reach out soon.",
+    "Entry level. Requires senior mindset, principal output, 10 years experience. Pays in exposure.",
     "You are one 'we've decided to move forward with other candidates' away from a personal record.",
-    "The job description asked for a 'rockstar ninja' so you're probably fine not applying.",
+    "The job description asked for a 'rockstar ninja.' Bullet dodged.",
+    "Your resume made it past the ATS. That's genuinely the good news.",
+    "No one reads cover letters. Everyone still asks for cover letters.",
+    "Another company posted 'urgent hiring!' for a role they'll fill internally.",
+    "Your LinkedIn profile was viewed by someone who will not follow up.",
+    // Day-specific — added to the pool when relevant
+    ...(day === 6 ? [
+      "It's Saturday. No one is looking at applications today.",
+      "Every day kind of feels like Saturday now, so you might as well.",
+    ] : []),
+    ...(day === 0 ? [
+      "It's Sunday. LinkedIn doesn't rest and neither do you.",
+      "Applying on a Sunday is a personality trait at this point.",
+    ] : []),
+    ...(day === 5 && hour >= 15 ? [
+      "Friday afternoon. Whatever you submit now will be read on Monday. Maybe.",
+    ] : day === 5 ? [
+      "It's Friday. No recruiter is making decisions today.",
+      "Wohoo, Friday! The day applications go to die quietly.",
+    ] : []),
+    ...(day === 1 && hour < 10 ? [
+      "Monday morning. The recruiter who ghosted you just reposted the same role.",
+    ] : []),
+    ...(hour < 6 ? [
+      "Job hunting at this hour? Even the ATS is asleep.",
+    ] : []),
+    ...(hour >= 22 ? [
+      "Late night job board scrolling. LinkedIn is pleased.",
+      "Nothing good has ever been applied to after 10 PM.",
+    ] : []),
   ]
 
-  const idx = (now.getDate() + now.getMonth()) % messages.length
-  return messages[idx]
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 // ─── Logo + company avatar ─────────────────────────────────────────────────────
