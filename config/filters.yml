@@ -1,0 +1,664 @@
+portals:
+  - name: Anthropic
+    type: greenhouse
+    company_id: anthropic
+    url: https://job-boards.greenhouse.io/anthropic
+    notes: ''
+    enabled: true
+  - name: OpenAI
+    type: custom
+    company_id: ''
+    url: https://openai.com/careers
+    notes: ''
+    enabled: true
+  - name: PolyAI
+    type: greenhouse
+    company_id: polyai
+    url: https://job-boards.eu.greenhouse.io/polyai
+    notes: UK. Voice AI for enterprise contact centers.
+    enabled: true
+  - name: Parloa
+    type: greenhouse
+    company_id: parloa
+    url: https://job-boards.eu.greenhouse.io/parloa
+    notes: Berlin EMEA. Voice AI enterprise.
+    enabled: true
+  - name: Intercom
+    type: greenhouse
+    company_id: intercom
+    url: https://job-boards.greenhouse.io/intercom
+    notes: Dublin EMEA. Fin AI agent.
+    enabled: true
+  - name: Hume AI
+    type: greenhouse
+    company_id: humeai
+    url: https://job-boards.greenhouse.io/humeai
+    notes: NYC. Empathic voice AI.
+    enabled: true
+  - name: ElevenLabs
+    type: ashby
+    company_id: elevenlabs
+    url: https://jobs.ashbyhq.com/elevenlabs
+    notes: Voice AI TTS leader.
+    enabled: true
+  - name: Deepgram
+    type: ashby
+    company_id: deepgram
+    url: https://jobs.ashbyhq.com/deepgram
+    notes: STT/TTS APIs.
+    enabled: true
+  - name: Vapi
+    type: ashby
+    company_id: vapi
+    url: https://jobs.ashbyhq.com/vapi
+    notes: Voice AI infrastructure.
+    enabled: true
+  - name: Bland AI
+    type: ashby
+    company_id: bland
+    url: https://jobs.ashbyhq.com/bland
+    notes: Voice phone agents. $65M Series B.
+    enabled: true
+  - name: Retool
+    type: custom
+    company_id: ''
+    url: https://retool.com/careers
+    notes: London. Popularized Deployed Engineer role.
+    enabled: true
+  - name: Airtable
+    type: greenhouse
+    company_id: airtable
+    url: https://job-boards.greenhouse.io/airtable
+    notes: No-code + AI platform.
+    enabled: true
+  - name: Vercel
+    type: greenhouse
+    company_id: vercel
+    url: https://job-boards.greenhouse.io/vercel
+    notes: AI SDK, v0.dev. Frontend AI tooling.
+    enabled: true
+  - name: Temporal
+    type: greenhouse
+    company_id: temporal
+    url: https://job-boards.greenhouse.io/temporal
+    notes: Workflow orchestration.
+    enabled: true
+  - name: Arize AI
+    type: greenhouse
+    company_id: arizeai
+    url: https://job-boards.greenhouse.io/arizeai
+    notes: LLMOps / AI observability.
+    enabled: true
+  - name: RunPod
+    type: greenhouse
+    company_id: runpod
+    url: https://job-boards.greenhouse.io/runpod
+    notes: GPU cloud for AI.
+    enabled: true
+  - name: Glean
+    type: greenhouse
+    company_id: gleanwork
+    url: https://job-boards.greenhouse.io/gleanwork
+    notes: Enterprise AI search.
+    enabled: true
+  - name: Ada
+    type: custom
+    company_id: ''
+    url: https://www.ada.cx/careers
+    notes: 'Toronto + remote. AI customer service. Disabled: ATS endpoint not public (careers page 403).'
+    enabled: false
+  - name: LivePerson
+    type: custom
+    company_id: ''
+    url: https://liveperson.com/company/careers
+    notes: Remote EMEA. Conversational AI enterprise.
+    enabled: true
+  - name: Sierra
+    type: ashby
+    company_id: sierra
+    url: https://jobs.ashbyhq.com/sierra
+    notes: Bret Taylor (ex-CEO Salesforce). AI customer agents.
+    enabled: true
+  - name: Decagon
+    type: ashby
+    company_id: decagon
+    url: https://jobs.ashbyhq.com/decagon
+    notes: AI customer support agents.
+    enabled: true
+  - name: Talkdesk
+    type: custom
+    company_id: ''
+    url: https://www.talkdesk.com/careers
+    notes: Lisbon. Contact center AI. EMEA friendly.
+    enabled: true
+  - name: Twilio
+    type: custom
+    company_id: ''
+    url: https://www.twilio.com/en-us/company/jobs
+    notes: Voice/messaging infrastructure.
+    enabled: true
+  - name: Dialpad
+    type: custom
+    company_id: ''
+    url: https://www.dialpad.com/careers
+    notes: Voice AI for business comms.
+    enabled: true
+  - name: Gong
+    type: custom
+    company_id: ''
+    url: https://www.gong.io/careers
+    notes: Revenue intelligence with voice AI.
+    enabled: true
+  - name: Genesys
+    type: custom
+    company_id: ''
+    url: https://www.genesys.com/careers
+    notes: Contact center cloud + AI.
+    enabled: true
+  - name: Salesforce
+    type: custom
+    company_id: ''
+    url: https://careers.salesforce.com
+    notes: Agentforce = AI agents platform.
+    enabled: true
+  - name: Langfuse
+    type: custom
+    company_id: ''
+    url: https://langfuse.com/careers
+    notes: Berlin. LLMOps / observability.
+    enabled: true
+  - name: Lindy
+    type: ashby
+    company_id: lindy
+    url: https://jobs.ashbyhq.com/lindy
+    notes: AI agent management platform.
+    enabled: true
+  - name: Cognigy
+    type: custom
+    company_id: ''
+    url: https://careers.cognigy.com
+    notes: Dusseldorf EMEA. Conversational AI enterprise.
+    enabled: true
+  - name: Speechmatics
+    type: greenhouse
+    company_id: speechmatics
+    url: https://job-boards.greenhouse.io/speechmatics
+    notes: Cambridge UK. Speech recognition platform.
+    enabled: true
+  - name: n8n
+    type: ashby
+    company_id: n8n
+    url: https://jobs.ashbyhq.com/n8n
+    notes: Berlin + remote EU/US. Workflow automation.
+    enabled: true
+  - name: Zapier
+    type: ashby
+    company_id: zapier
+    url: https://jobs.ashbyhq.com/zapier
+    notes: Remote-first. Automation platform leader.
+    enabled: true
+  - name: Make.com (Celonis)
+    type: custom
+    company_id: ''
+    url: https://www.make.com/en/careers
+    notes: Celonis parent company. Automation platform.
+    enabled: true
+  - name: Cohere
+    type: ashby
+    company_id: cohere
+    url: https://jobs.ashbyhq.com/cohere
+    notes: AI/LLM provider. Toronto + remote.
+    enabled: true
+  - name: LangChain
+    type: ashby
+    company_id: langchain
+    url: https://jobs.ashbyhq.com/langchain
+    notes: LangChain/LangSmith framework.
+    enabled: true
+  - name: Pinecone
+    type: ashby
+    company_id: pinecone
+    url: https://jobs.ashbyhq.com/pinecone
+    notes: Vector database.
+    enabled: true
+  - name: Mistral AI
+    type: lever
+    company_id: mistral
+    url: https://jobs.lever.co/mistral
+    notes: Paris. European AI lab.
+    enabled: true
+  - name: Weights & Biases
+    type: custom
+    company_id: ''
+    url: https://wandb.ai/site/careers
+    notes: 'MLOps platform. Disabled: left Lever, careers page is JS-rendered SPA without public ATS endpoint.'
+    enabled: false
+  - name: Palantir
+    type: lever
+    company_id: palantir
+    url: https://jobs.lever.co/palantir
+    notes: FDE roles. Mostly US/London.
+    enabled: true
+  - name: Factorial
+    type: custom
+    company_id: ''
+    url: https://factorialhr.com/careers
+    notes: 'Barcelona. HR SaaS unicorn. Disabled: left Greenhouse, ATS endpoint not public.'
+    enabled: false
+  - name: Attio
+    type: ashby
+    company_id: attio
+    url: https://jobs.ashbyhq.com/attio
+    notes: Remote EU. AI-native CRM. Series B $52M.
+    enabled: true
+  - name: Tinybird
+    type: lever
+    company_id: tinybird
+    url: https://jobs.lever.co/tinybird
+    notes: Remote. Real-time data platform. Migrated from Ashby to Lever.
+    enabled: true
+  - name: Clarity AI
+    type: greenhouse
+    company_id: clarityai
+    url: https://job-boards.greenhouse.io/clarityai
+    notes: Madrid/Remote. Sustainability analytics with AI. Migrated from Lever to Greenhouse.
+    enabled: true
+  - name: Travelperk
+    type: custom
+    company_id: ''
+    url: https://www.travelperk.com/careers/
+    notes: 'Barcelona. Business travel unicorn. Disabled: left Ashby, careers page is SPA without public ATS endpoint.'
+    enabled: false
+  - name: Aleph Alpha
+    type: ashby
+    company_id: AlephAlpha
+    url: https://jobs.ashbyhq.com/AlephAlpha
+    notes: Heidelberg DE. Sovereign European LLM provider, enterprise & government focus.
+    enabled: true
+  - name: DeepL
+    type: ashby
+    company_id: DeepL
+    url: https://jobs.ashbyhq.com/DeepL
+    notes: Cologne DE. Translation & language AI. 60+ open roles, EU/DACH heavy.
+    enabled: true
+  - name: Black Forest Labs
+    type: greenhouse
+    company_id: blackforestlabs
+    url: https://job-boards.greenhouse.io/blackforestlabs
+    notes: Freiburg DE / SF. FLUX image models, ex-Stable Diffusion team.
+    enabled: true
+  - name: Helsing
+    type: greenhouse
+    company_id: helsing
+    url: https://job-boards.greenhouse.io/helsing
+    notes: Munich / Berlin / London / Paris. Defence AI unicorn. 100+ roles, ML & FDE.
+    enabled: true
+  - name: Celonis
+    type: greenhouse
+    company_id: celonis
+    url: https://job-boards.greenhouse.io/celonis
+    notes: Munich / NYC. Process intelligence, Applied AI Engineer roles, Field CTOs.
+    enabled: true
+  - name: Contentful
+    type: greenhouse
+    company_id: contentful
+    url: https://job-boards.greenhouse.io/contentful
+    notes: Berlin / Denver. Headless CMS, AI content workflows.
+    enabled: true
+  - name: GetYourGuide
+    type: greenhouse
+    company_id: getyourguide
+    url: https://job-boards.greenhouse.io/getyourguide
+    notes: Berlin. Travel marketplace, ML & data platform roles.
+    enabled: true
+  - name: HelloFresh
+    type: greenhouse
+    company_id: hellofresh
+    url: https://job-boards.greenhouse.io/hellofresh
+    notes: Berlin. Meal kit unicorn, large data/ML org.
+    enabled: true
+  - name: N26
+    type: greenhouse
+    company_id: n26
+    url: https://job-boards.greenhouse.io/n26
+    notes: Berlin / Barcelona. Mobile bank, ~50 roles, ML & risk.
+    enabled: true
+  - name: Trade Republic
+    type: greenhouse
+    company_id: traderepublicbank
+    url: https://job-boards.greenhouse.io/traderepublicbank
+    notes: Berlin / London / Paris. Neobroker, ~50 roles, platform & data.
+    enabled: true
+  - name: SumUp
+    type: greenhouse
+    company_id: sumup
+    url: https://job-boards.greenhouse.io/sumup
+    notes: Berlin / London. Payments fintech, EU + LATAM hiring.
+    enabled: true
+  - name: Qonto
+    type: lever
+    company_id: qonto
+    url: https://jobs.lever.co/qonto
+    notes: Paris / Berlin / Barcelona / Milan. SMB neobank, MLOps for AI Product roles.
+    enabled: true
+  - name: Forto
+    type: ashby
+    company_id: forto
+    url: https://jobs.ashbyhq.com/forto
+    notes: Berlin DE. Digital freight forwarder, product & data roles, German + English. Migrated from Lever to Ashby.
+    enabled: true
+  - name: Lakera
+    type: ashby
+    company_id: lakera.ai
+    url: https://jobs.ashbyhq.com/lakera.ai
+    notes: Zurich CH / SF. AI security & guardrails. Has Forward Deployed Engineer roles.
+    enabled: true
+  - name: Scandit
+    type: greenhouse
+    company_id: scandit
+    url: https://job-boards.greenhouse.io/scandit
+    notes: Zurich CH. Computer vision / smart data capture, ML roles.
+    enabled: true
+  - name: Cradle
+    type: ashby
+    company_id: cradlebio
+    url: https://jobs.ashbyhq.com/cradlebio
+    notes: Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles.
+    enabled: true
+  - name: Hugging Face
+    type: custom
+    company_id: ''
+    url: https://apply.workable.com/huggingface/
+    notes: Paris / NYC / Remote. ML hub & open-source models.
+    enabled: true
+  - name: Photoroom
+    type: ashby
+    company_id: photoroom
+    url: https://jobs.ashbyhq.com/photoroom
+    notes: Paris FR. AI photo editor, Head of CV / Head of ML roles.
+    enabled: true
+  - name: Pigment
+    type: lever
+    company_id: pigment
+    url: https://jobs.lever.co/pigment
+    notes: Paris FR / NYC / London. AI-powered FP&A planning platform.
+    enabled: true
+  - name: Wayve
+    type: greenhouse
+    company_id: wayve
+    url: https://job-boards.greenhouse.io/wayve
+    notes: London UK. Embodied AI for self-driving, ML & robotics roles.
+    enabled: true
+  - name: Isomorphic Labs
+    type: greenhouse
+    company_id: isomorphiclabs
+    url: https://job-boards.greenhouse.io/isomorphiclabs
+    notes: London / Lausanne / Cambridge MA. DeepMind spin-out for drug discovery AI.
+    enabled: true
+  - name: PhysicsX
+    type: greenhouse
+    company_id: physicsx
+    url: https://job-boards.greenhouse.io/physicsx
+    notes: London UK. Physics-informed ML for engineering, ~40 roles.
+    enabled: true
+  - name: Stability AI
+    type: greenhouse
+    company_id: stabilityai
+    url: https://job-boards.greenhouse.io/stabilityai
+    notes: London / SF. Generative AI image/video research lab.
+    enabled: true
+  - name: Synthesia
+    type: ashby
+    company_id: synthesia
+    url: https://jobs.ashbyhq.com/synthesia
+    notes: London UK. AI video generation for enterprise, $4B valuation.
+    enabled: true
+  - name: Faculty
+    type: ashby
+    company_id: faculty
+    url: https://jobs.ashbyhq.com/faculty
+    notes: London UK. Applied AI consultancy. 80+ roles, AI Safety / MLE / Delivery.
+    enabled: true
+  - name: Causaly
+    type: ashby
+    company_id: causaly
+    url: https://jobs.ashbyhq.com/causaly
+    notes: London / Athens. Biomedical knowledge graph + AI.
+    enabled: true
+  - name: Lovable
+    type: ashby
+    company_id: lovable
+    url: https://jobs.ashbyhq.com/lovable
+    notes: Stockholm SE. AI app builder (text-to-app), 80+ open roles.
+    enabled: true
+  - name: Legora
+    type: ashby
+    company_id: legora
+    url: https://jobs.ashbyhq.com/legora
+    notes: Stockholm SE / NYC / London. AI-native legal workspace.
+    enabled: true
+  - name: Spotify
+    type: lever
+    company_id: spotify
+    url: https://jobs.lever.co/spotify
+    notes: Stockholm SE / NYC / London. Audio platform, large ML/personalization org.
+    enabled: true
+  - name: Vinted
+    type: custom
+    company_id: ''
+    url: https://careers.vinted.com/
+    notes: 'Vilnius LT / Berlin. C2C marketplace unicorn. Disabled: left Lever, uses custom portal at careers.vinted.com.'
+    enabled: false
+  - name: Amplemarket
+    type: greenhouse
+    company_id: amplemarket
+    url: https://job-boards.greenhouse.io/amplemarket
+    notes: Lisbon PT / Remote. AI-native sales platform.
+    enabled: true
+  - name: Perplexity
+    type: ashby
+    company_id: perplexity
+    url: https://jobs.ashbyhq.com/perplexity
+    notes: AI-native search and enterprise AI platform.
+    enabled: true
+  - name: Clay Labs
+    type: ashby
+    company_id: claylabs
+    url: https://jobs.ashbyhq.com/claylabs
+    notes: AI-native GTM and workflow automation platform.
+    enabled: true
+  - name: Runway
+    type: ashby
+    company_id: runway
+    url: https://jobs.ashbyhq.com/runway
+    notes: Generative AI video and creative tooling platform. Migrated from Greenhouse to Ashby.
+    enabled: true
+  - name: Hightouch
+    type: greenhouse
+    company_id: hightouch
+    url: https://job-boards.greenhouse.io/hightouch
+    notes: Data activation platform with AI agents and solutions engineering roles.
+    enabled: true
+  - name: WorkOS
+    type: ashby
+    company_id: workos
+    url: https://jobs.ashbyhq.com/workos
+    notes: Developer tools and enterprise-ready auth/platform APIs.
+    enabled: true
+  - name: Supabase
+    type: ashby
+    company_id: supabase
+    url: https://jobs.ashbyhq.com/supabase
+    notes: Open-source Firebase alternative. Remote-first. Postgres + Auth + Storage. Strong DevRel/DX hiring.
+    enabled: true
+  - name: Resend
+    type: ashby
+    company_id: resend
+    url: https://jobs.ashbyhq.com/resend
+    notes: Email API for developers. Remote-first. DX/DevRel focused.
+    enabled: true
+  - name: Clerk
+    type: ashby
+    company_id: clerk
+    url: https://jobs.ashbyhq.com/clerk
+    notes: Auth & user management for developers. SE / TAM / PM roles.
+    enabled: true
+  - name: Inngest
+    type: ashby
+    company_id: inngest
+    url: https://jobs.ashbyhq.com/inngest
+    notes: Durable workflow engine for serverless. DX/DevRel/Engineering hiring.
+    enabled: true
+  - name: PlanetScale
+    type: greenhouse
+    company_id: planetscale
+    url: https://job-boards.greenhouse.io/planetscale
+    notes: Serverless MySQL platform. Customer Engineering, Engineering, Sales.
+    enabled: true
+  - name: Zep AI
+    type: custom
+    company_id: ''
+    url: https://www.getzep.com/careers
+    notes: Context engineering platform for AI agents. YC W24. Lead FDE + DevRel Lead roles. US-only currently.
+    enabled: true
+  - name: Maxim AI
+    type: custom
+    company_id: ''
+    url: https://www.getmaxim.ai/careers
+    notes: AI evaluation and observability platform. Bangalore-based, mostly on-site.
+    enabled: true
+job_boards:
+  - type: indeed_rss
+    queries:
+      - site:jobs.ashbyhq.com "AI Product Manager" OR "Senior Product Manager AI" remote
+      - site:jobs.ashbyhq.com "Solutions Architect" AI OR automation remote
+      - site:jobs.ashbyhq.com "AI Engineer" OR "LLM Engineer" OR "Forward Deployed" remote
+      - site:jobs.ashbyhq.com "Agentic" OR "AI Agent" OR "Automation Architect" remote
+      - >-
+        site:boards.greenhouse.io OR site:job-boards.greenhouse.io "AI Product Manager" OR "Senior Product Manager" AI
+        remote
+      - site:boards.greenhouse.io OR site:job-boards.greenhouse.io "Solutions Architect" OR "Forward Deployed" AI remote
+      - site:boards.greenhouse.io OR site:job-boards.greenhouse.io "AI Engineer" OR "LLM" OR "Agentic" remote
+      - site:apply.workable.com "AI" "Product Manager" OR "Solutions Architect" OR "AI Engineer" remote
+      - >-
+        site:jobs.ashbyhq.com "no-code" OR "low-code" OR "automation engineer" OR "n8n" OR "Make" OR "Airtable" remote
+        senior
+      - >-
+        site:job-boards.greenhouse.io "no-code" OR "low-code" OR "automation engineer" OR "business systems" senior
+        remote
+      - '"GTM Engineer" OR "RevOps Engineer" OR "Growth Engineer" automation Airtable OR Make OR Clay remote'
+      - >-
+        site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com "Voice AI" OR "Conversational AI" OR "Speech" "Solutions"
+        OR "Forward Deployed" OR "Customer Engineer"
+      - >-
+        site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com "Voice" OR "Speech" "AI Engineer" OR "Deployment" OR
+        "Integration"
+      - >-
+        "contact center" OR "customer service" "AI" "Solutions Architect" OR "Solutions Engineer" OR "Forward Deployed"
+        remote
+      - >-
+        "Forward Deployed Engineer" OR "Deployed Engineer" OR "Deployment Engineer" AI site:job-boards.greenhouse.io OR
+        site:jobs.ashbyhq.com OR site:jobs.lever.co
+      - >-
+        site:remotive.com "AI Engineer" OR "Developer Advocate" OR "Solutions Architect" OR "Forward Deployed" OR
+        "DevRel" Europe
+      - site:weworkremotely.com "AI" OR "DevRel" OR "Solutions Engineer" OR "Forward Deployed" OR "Founding Engineer"
+      - site:workingnomads.com "AI Engineer" OR "Developer Advocate" OR "Solutions Architect" OR "Forward Deployed"
+      - site:euremotejobs.com "AI" OR "DevRel" OR "Solutions Architect" OR "Forward Deployed" OR "Founding Engineer"
+      - >-
+        site:remoteok.com "AI Engineer" OR "Developer Advocate" OR "Solutions Architect" OR "Forward Deployed" OR
+        "Founding Engineer"
+      - site:ai-jobs.net "Developer Advocate" OR "Solutions Architect" OR "Forward Deployed" OR "DevRel" remote Europe
+      - site:ai-jobs.net "Founding Engineer" OR "Applied AI Engineer" OR "Founding" remote
+      - site:fwddeploy.com "Forward Deployed" OR "Deployed Engineer" remote Europe OR EMEA
+      - >-
+        site:ycombinator.com/jobs OR site:workatastartup.com "Forward Deployed" OR "Developer Advocate" OR "Founding
+        Engineer" OR "Solutions Architect" remote
+      - site:workatastartup.com "Applied AI" OR "AI Engineer" OR "AI Agent" remote Europe
+      - >-
+        site:getmanfred.com/en/job-offers "Solutions Architect" OR "DevRel" OR "Forward Deployed" OR "AI Engineer" OR
+        "Founding"
+      - site:getmanfred.com "remote" "AI" OR "Senior" OR "Staff" OR "Lead"
+      - >-
+        site:tecnoempleo.com "AI Engineer" OR "Solutions Architect" OR "DevRel" OR "Forward Deployed" OR "Founding
+        Engineer"
+      - site:tecnoempleo.com "remoto" OR "remote" Senior "AI" OR "Architect" OR "Lead"
+      - site:jobfluent.com Madrid OR Barcelona "AI" OR "Engineer" OR "Solutions" OR "DevRel"
+      - >-
+        site:welcometothejungle.com Spain OR Madrid OR Barcelona "AI Engineer" OR "Solutions Architect" OR "DevRel" OR
+        "Forward Deployed"
+      - site:devrelx.com/jobs remote OR Europe OR EMEA
+      - site:trueup.io/devrel OR site:trueup.io "Developer Advocate" OR "DevRel" remote Europe
+      - site:remoterocketship.com/jobs/developer-relations OR site:remoterocketship.com "DevRel" remote
+      - site:devreljob.com remote OR Europe OR EMEA
+      - >-
+        site:himalayas.app "AI Engineer" OR "Solutions Architect" OR "Developer Advocate" OR "Forward Deployed" OR
+        "Founding Engineer" Europe
+      - site:jooble.org "AI Engineer" OR "Solutions Architect" OR "DevRel" Madrid OR remote España
+      - site:eudatajobs.com "AI" OR "ML" OR "Data" "Engineer" OR "Architect" remote Europe
+      - >-
+        site:news.ycombinator.com OR site:hnrss.org "AI Engineer" OR "Forward Deployed" OR "DevRel" OR "Founding
+        Engineer" remote
+    enabled: true
+title_filter:
+  positive:
+    - AI
+    - ML
+    - LLM
+    - Agent
+    - Agentic
+    - GenAI
+    - Generative AI
+    - NLP
+    - LLMOps
+    - MLOps
+    - Voice AI
+    - Conversational AI
+    - Speech
+    - KI
+    - Künstliche Intelligenz
+    - KI Engineer
+    - KI Trainer
+    - Dozent
+    - Weiterbildung
+    - Platform Engineer
+    - Solutions Architect
+    - Solutions Engineer
+    - Forward Deployed
+    - Deployed Engineer
+    - Customer Engineer
+    - Integration Engineer
+    - Product Manager
+    - Technical PM
+    - Automation
+    - Hyperautomation
+    - Low-Code
+    - No-Code
+    - GTM Engineer
+    - RevOps
+    - Business Systems
+    - Internal Tools
+    - Transformation
+  negative:
+    - Junior
+    - Intern
+    - .NET
+    - 'Java '
+    - iOS
+    - Android
+    - PHP
+    - Ruby
+    - Embedded
+    - Firmware
+    - FPGA
+    - ASIC
+    - Blockchain
+    - Web3
+    - Crypto
+    - Salesforce Admin
+    - 'SAP '
+    - Oracle EBS
+    - Mainframe
+    - COBOL
+    - Backend Engineer
+    - Software Engineer
