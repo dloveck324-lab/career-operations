@@ -115,10 +115,12 @@ export async function runScan(
     return { ...stats, reskipped: 0, linkClosed: 0, paused: true }
   }
 
-  // RSS sources — throttled: 2 s between requests to avoid Indeed 429s
-  const rssBoards = filters?.job_boards?.filter(b => b.type === 'indeed_rss' && b.enabled) ?? []
-  for (const board of rssBoards) {
-    for (const query of board.queries) {
+  // RSS sources — queries auto-generated from title_filter.positive keywords
+  const rssEnabled = filters?.job_boards?.find(b => b.type === 'indeed_rss')?.enabled ?? true
+  if (rssEnabled) {
+    const keywords = filters?.title_filter?.positive ?? []
+    const rssQueries = buildRssQueries(keywords)
+    for (const query of rssQueries) {
       if (isPaused()) {
         emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing })
         return { ...stats, reskipped: 0, linkClosed: 0, paused: true }
@@ -162,4 +164,15 @@ export async function runScan(
   emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing, reskipped, linkClosed })
 
   return { ...stats, reskipped, linkClosed, paused: false }
+}
+
+function buildRssQueries(keywords: string[]): string[] {
+  if (keywords.length === 0) return []
+  const CHUNK = 6
+  const queries: string[] = []
+  for (let i = 0; i < keywords.length; i += CHUNK) {
+    const chunk = keywords.slice(i, i + CHUNK)
+    queries.push(chunk.map(k => `"${k}"`).join(' OR ') + ' remote')
+  }
+  return queries
 }

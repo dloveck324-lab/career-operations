@@ -69,6 +69,7 @@ function AtsEditCell({ id, value, field }: GridRenderEditCellParams) {
 
 export function PortalsForm() {
   const [rows, setRows] = useState<PortalRow[]>([])
+  const [indeedEnabled, setIndeedEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +85,8 @@ export function PortalsForm() {
       if (!v) return
       const f = v as FiltersFile
       setRows((f.portals ?? []).map(p => ({ ...p, id: idRef.current++ })))
+      const rss = (f.job_boards ?? []).find((b: { type: string }) => b.type === 'indeed_rss') as { enabled?: boolean } | undefined
+      setIndeedEnabled(rss?.enabled ?? true)
     }).catch(() => null)
   }, [])
 
@@ -92,7 +95,11 @@ export function PortalsForm() {
     try {
       const portals = rows.map(({ id: _id, ...p }) => p)
       const current = (await api.settings.filters()) as FiltersFile ?? {}
-      await api.settings.saveFilters({ ...current, portals })
+      const existingBoards = (current.job_boards ?? []) as { type: string; enabled?: boolean; queries?: string[] }[]
+      const job_boards = existingBoards.some(b => b.type === 'indeed_rss')
+        ? existingBoards.map(b => b.type === 'indeed_rss' ? { ...b, enabled: indeedEnabled } : b)
+        : [...existingBoards, { type: 'indeed_rss', enabled: indeedEnabled, queries: [] }]
+      await api.settings.saveFilters({ ...current, portals, job_boards })
       setSaved(true); setTimeout(() => setSaved(false), 2500)
     } catch (e) { setError(String(e)) }
     finally { setSaving(false) }
@@ -223,9 +230,20 @@ export function PortalsForm() {
 
   return (
     <Stack spacing={2}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between"
+        sx={{ px: 1.5, py: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+        <Stack>
+          <Typography variant="body2">Indeed RSS</Typography>
+          <Typography variant="caption" color="text.secondary">
+            Searches Indeed using your Title Filter keywords · queries auto-generated
+          </Typography>
+        </Stack>
+        <Switch size="small" checked={indeedEnabled} onChange={e => setIndeedEnabled(e.target.checked)} />
+      </Stack>
+
       <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
         <Typography variant="body2" color="text.secondary">
-          {enabledCount} of {rows.length} enabled
+          {enabledCount} of {rows.length} portals enabled
         </Typography>
         {ATS_TYPES.filter(t => byType[t] > 0).map(t => (
           <Chip key={t} label={`${byType[t]} ${t}`} size="small" color={ATS_COLORS[t]}
