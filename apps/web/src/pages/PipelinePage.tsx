@@ -442,26 +442,25 @@ export function PipelinePage() {
 
           {/* Action buttons */}
           <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0, mt: 0.5 }}>
-            {/* SCAN */}
-            <ButtonGroup size="small" disabled={evaluating} variant="contained">
-              <Button
-                startIcon={scanning ? <CircularProgress size={14} color="inherit" /> : <Search />}
-                onClick={handleScan}
-                disabled={scanning || evaluating}
-                sx={{ minWidth: 110 }}
-              >
-                {scanning ? 'Scanning' : 'Scan'}
-              </Button>
-              <Tooltip title="Pause after current phase">
-                <Button
-                  onClick={handlePauseScan}
-                  color="warning"
-                  sx={{ px: 1, visibility: scanning ? 'visible' : 'hidden', width: 32 }}
-                >
-                  <Pause fontSize="small" />
+            {/* SCAN — fixed-width box keeps layout stable between idle and scanning states */}
+            <Box sx={{ width: 148, display: 'flex' }}>
+              {scanning ? (
+                <ButtonGroup size="small" variant="contained" sx={{ width: '100%' }}>
+                  <Button startIcon={<CircularProgress size={14} color="inherit" />} disabled sx={{ flex: 1 }}>
+                    Scanning
+                  </Button>
+                  <Tooltip title="Pause after current phase">
+                    <Button onClick={handlePauseScan} color="warning" sx={{ px: 1 }}>
+                      <Pause fontSize="small" />
+                    </Button>
+                  </Tooltip>
+                </ButtonGroup>
+              ) : (
+                <Button variant="contained" size="small" startIcon={<Search />} onClick={handleScan} disabled={evaluating} fullWidth>
+                  Scan
                 </Button>
-              </Tooltip>
-            </ButtonGroup>
+              )}
+            </Box>
 
             {/* EVALUATE */}
             <ButtonGroup size="small" disabled={scanning} variant="outlined">
