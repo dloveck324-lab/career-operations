@@ -303,15 +303,15 @@ export function PipelinePage() {
   // Scan / evaluate state
   const [scanning, setScanning] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
-  const [progress, setProgress] = useState<string | null>(null)
   const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null)
   const [evalModel, setEvalModel] = useState<'haiku' | 'sonnet'>('haiku')
   const [evalLimit, setEvalLimit] = useState<number>(0)
   const [evalCompany, setEvalCompany] = useState<string | null>(null)
   const [companies, setCompanies] = useState<string[]>([])
 
-  // Scan toast
-  const [scanToast, setScanToast] = useState<{ text: string; severity: 'info' | 'success' | 'warning' } | null>(null)
+  // Toasts
+  const [scanToast, setScanToast] = useState<{ text: string; severity: 'info' | 'success' | 'warning' | 'error' } | null>(null)
+  const [evalToast, setEvalToast] = useState<{ text: string; severity: 'info' | 'success' | 'warning' | 'error' } | null>(null)
 
   // Automation badge
   const [autoScanLabel, setAutoScanLabel] = useState<string | null>(null)
@@ -372,14 +372,14 @@ export function PipelinePage() {
         setScanToast({ text: `Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`, severity: 'warning' })
       }
       if (evt.type === 'eval_queued' && evt.jobIds) { setEvalQueueIds(new Set(evt.jobIds)) }
-      if (evt.type === 'eval_start') { setEvaluating(true); setProgress(`Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`) }
+      if (evt.type === 'eval_start') { setEvaluating(true); setEvalToast({ text: `Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`, severity: 'info' }) }
       if (evt.type === 'eval_done') {
         if (evt.jobId != null) setEvalQueueIds(prev => { const n = new Set(prev); n.delete(evt.jobId!); return n })
-        setProgress(`Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`)
+        setEvalToast({ text: `Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`, severity: 'info' })
       }
-      if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setProgress('Evaluation complete') }
-      if (evt.type === 'eval_paused') { setEvaluating(false); setEvalQueueIds(new Set()); setProgress(`Paused — evaluated ${evt.done ?? 0} jobs`) }
-      if (evt.type === 'error') setProgress(`Error: ${evt.message}`)
+      if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: 'Evaluation complete', severity: 'success' }) }
+      if (evt.type === 'eval_paused') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: `Paused — evaluated ${evt.done ?? 0} jobs`, severity: 'warning' }) }
+      if (evt.type === 'error') setScanToast({ text: `Scan error: ${evt.message}`, severity: 'error' })
     }
     window.addEventListener('sse-scan', handler)
     return () => window.removeEventListener('sse-scan', handler)
@@ -399,11 +399,11 @@ export function PipelinePage() {
   // Evaluate handlers
   const runEvaluate = async (opts?: { model?: 'haiku' | 'sonnet'; limit?: number; company?: string }) => {
     setEvaluating(true)
-    setProgress('Starting evaluation...')
+    setEvalToast({ text: 'Starting evaluation...', severity: 'info' })
     try {
       const result = await api.evaluate(opts)
-      if (result.queued === 0) { setEvaluating(false); setProgress('No jobs to evaluate — run Scan first or check Inbox') }
-    } catch (err) { setEvaluating(false); setProgress(`Evaluate failed: ${err}`) }
+      if (result.queued === 0) { setEvaluating(false); setEvalToast({ text: 'No jobs to evaluate — run Scan first or check Inbox', severity: 'warning' }) }
+    } catch (err) { setEvaluating(false); setEvalToast({ text: `Evaluate failed: ${err}`, severity: 'error' }) }
   }
 
   const handleEvaluate = () => runEvaluate({ model: evalModel, limit: evalLimit || undefined, company: evalCompany ?? undefined })
@@ -414,7 +414,7 @@ export function PipelinePage() {
   }
 
   const handlePauseEvaluate = async () => {
-    try { await api.pauseEvaluate(); setProgress('Pausing after current job...') } catch { /* ignore */ }
+    try { await api.pauseEvaluate(); setEvalToast({ text: 'Pausing after current job...', severity: 'info' }) } catch { /* ignore */ }
   }
 
   const openPopover = async (e: React.MouseEvent<HTMLElement>) => {
@@ -673,12 +673,6 @@ export function PipelinePage() {
           </Stack>
         </Stack>
 
-        {/* Progress text */}
-        {progress && (
-          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
-            {progress}
-          </Typography>
-        )}
 
         <Divider sx={{ mt: 2 }} />
       </Box>
@@ -789,18 +783,15 @@ export function PipelinePage() {
         onStatusChange={() => { loadJobs(); loadStats() }}
       />
 
-      <Snackbar
-        open={scanToast !== null}
-        autoHideDuration={null}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          severity={scanToast?.severity ?? 'info'}
-          variant="filled"
-          onClose={() => setScanToast(null)}
-          sx={{ minWidth: 280, alignItems: 'center' }}
-        >
+      <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert severity={scanToast?.severity ?? 'info'} variant="filled" onClose={() => setScanToast(null)} sx={{ minWidth: 280 }}>
           {scanToast?.text}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar open={evalToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+        <Alert severity={evalToast?.severity ?? 'info'} variant="filled" onClose={() => setEvalToast(null)} sx={{ minWidth: 280 }}>
+          {evalToast?.text}
         </Alert>
       </Snackbar>
     </Box>
