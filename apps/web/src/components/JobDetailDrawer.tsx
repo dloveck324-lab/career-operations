@@ -3,7 +3,8 @@ import {
   Divider, CircularProgress, Alert,
 } from '@mui/material'
 import { Close, OpenInNew, Send, SkipNext, Psychology, Refresh } from '@mui/icons-material'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { marked } from 'marked'
 import { api, type Job } from '../api.js'
 import { ScoreChip } from './ScoreChip.js'
 
@@ -16,6 +17,13 @@ interface Props {
 export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+
+  const descriptionHtml = useMemo(() => {
+    const raw = job?.content?.cleaned_md ?? job?.content?.raw_text ?? ''
+    const text = raw.slice(0, 6000)
+    // If it already looks like HTML, use as-is; otherwise parse as markdown
+    return text.trimStart().startsWith('<') ? text : marked.parse(text) as string
+  }, [job?.content?.cleaned_md, job?.content?.raw_text])
 
   const handleApply = async (showBrowser = false) => {
     if (!job) return
@@ -191,9 +199,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                   '& li': { mb: 0.25 },
                   '& p': { my: 0.5 },
                 }}
-                dangerouslySetInnerHTML={{
-                  __html: (job.content.cleaned_md ?? job.content.raw_text ?? '').slice(0, 6000),
-                }}
+                dangerouslySetInnerHTML={{ __html: descriptionHtml }}
               />
             </Box>
           )}
