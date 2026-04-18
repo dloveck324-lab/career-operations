@@ -14,7 +14,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   DataGrid, type GridColDef, type GridCellParams, type GridRowSelectionModel,
 } from '@mui/x-data-grid'
-import { api, type Job, type JobStatus, type Stats } from '../api.js'
+import { api, type Job, type JobStatus, type Stats, type ClaudeUsage } from '../api.js'
 import { ScoreChip } from '../components/ScoreChip.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
@@ -160,6 +160,75 @@ function highlightKeywords(text: string, keywords: string[]): React.ReactNode {
   )
 }
 
+// ─── Claude usage donut ───────────────────────────────────────────────────────
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`
+  return `${n}`
+}
+
+function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
+  const r = 11, sw = 4, pad = 2
+  const cx = r + sw / 2 + pad
+  const cy = cx
+  const size = cx * 2
+  const C = 2 * Math.PI * r
+
+  const segs = usage
+    ? [
+        { value: usage.sonnetTokens, color: '#6366f1' },
+        { value: usage.opusTokens,   color: '#a855f7' },
+        { value: usage.haikuTokens,  color: '#14b8a6' },
+      ].filter(s => s.value > 0)
+    : []
+  const total = segs.reduce((a, s) => a + s.value, 0)
+
+  let accum = 0
+  const rendered = segs.map(seg => {
+    const len = (seg.value / total) * C
+    const item = { color: seg.color, dasharray: `${len} ${C - len}`, dashoffset: C - accum }
+    accum += len
+    return item
+  })
+
+  const renewalLabel = usage
+    ? new Date(usage.renewalDate + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—'
+
+  const tip = (
+    <Box sx={{ fontSize: 11, lineHeight: 1.8, py: 0.25 }}>
+      <Box>Sessions <strong>{usage?.sessions ?? '—'}</strong></Box>
+      <Box>Messages <strong>{usage?.messages ?? '—'}</strong></Box>
+      <Box>Sonnet <strong>{usage ? fmtTokens(usage.sonnetTokens) + ' tok' : '—'}</strong></Box>
+      <Box>~Renewal <strong>{renewalLabel}</strong></Box>
+    </Box>
+  )
+
+  return (
+    <Tooltip title={tip} arrow placement="bottom-end" slotProps={{ tooltip: { sx: { maxWidth: 160 } } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'default', px: 0.25 }}>
+        <svg width={size} height={size} style={{ display: 'block' }}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={sw} />
+          {total > 0 ? (
+            <g transform={`rotate(-90, ${cx}, ${cy})`}>
+              {rendered.map((seg, i) => (
+                <circle
+                  key={i} cx={cx} cy={cy} r={r} fill="none"
+                  stroke={seg.color} strokeWidth={sw}
+                  strokeDasharray={seg.dasharray}
+                  strokeDashoffset={seg.dashoffset}
+                />
+              ))}
+            </g>
+          ) : (
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} strokeDasharray="3 3" />
+          )}
+        </svg>
+      </Box>
+    </Tooltip>
+  )
+}
+
 function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]): GridColDef[] { return [
   {
     field: 'company', headerName: 'Company', flex: 1, minWidth: 160,
@@ -231,6 +300,7 @@ export function PipelinePage() {
   // Header state
   const [firstName, setFirstName] = useState('David')
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<HTMLElement | null>(null)
+  const [claudeUsage, setClaudeUsage] = useState<ClaudeUsage | null>(null)
   const greeting = useMemo(() => getGreeting(), [])
   const wittyMessage = useMemo(() => getWittyMessage(), [])
 
@@ -268,6 +338,10 @@ export function PipelinePage() {
     api.settings.automation().then(cfg => {
       setAutoScanLabel(cfg.autoScan.enabled ? `AUTO - ${cfg.autoScan.intervalHours}H` : null)
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    api.settings.claudeUsage().then(setClaudeUsage).catch(() => {})
   }, [])
 
   // Load first name from profile (candidate.full_name)
@@ -584,6 +658,8 @@ export function PipelinePage() {
                 )
               })}
             </Menu>
+
+            <ClaudeUsageDonut usage={claudeUsage} />
 
             {/* Settings */}
             <Tooltip title="Settings">

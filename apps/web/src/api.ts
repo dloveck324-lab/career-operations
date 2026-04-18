@@ -55,6 +55,16 @@ export interface AutomationStatus extends AutomationConfig {
   keepAwakeSupported: boolean
 }
 
+export interface ClaudeUsage {
+  sessions: number
+  messages: number
+  sonnetTokens: number
+  opusTokens: number
+  haikuTokens: number
+  totalTokens: number
+  renewalDate: string
+}
+
 export const api = {
   health: () => req<Health>('/health'),
   jobs: (status?: JobStatus) => req<Job[]>(`/jobs${status ? `?status=${status}` : ''}`),
@@ -89,6 +99,7 @@ export const api = {
     seedMappings: () => req<{ ok: boolean; seeded: number }>('/settings/field-mappings/seed', { method: 'POST' }),
     automation: () => req<AutomationStatus>('/settings/automation'),
     saveAutomation: (data: AutomationConfig) => req<{ ok: boolean }>('/settings/automation', { method: 'PUT', body: JSON.stringify(data) }),
+    claudeUsage: () => req<ClaudeUsage>('/settings/claude-usage'),
   },
   portals: {
     discover: () => req<{ portals: DiscoveredPortal[] }>('/portals/discover'),

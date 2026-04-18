@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PinchTabClient } from '../autofill/pinchtab.js'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { resolve } from 'path'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
+import { resolve, join } from 'path'
+import { homedir } from 'os'
 import yaml from 'js-yaml'
 import { configExists } from '@job-pipeline/core'
 import { scheduler } from '../automation/scheduler.js'
@@ -14,12 +15,86 @@ function configPath(name: string) {
   return resolve(CONFIG_DIR, name)
 }
 
+export interface ClaudeUsage {
+  sessions: number
+  messages: number
+  sonnetTokens: number
+  opusTokens: number
+  haikuTokens: number
+  totalTokens: number
+  renewalDate: string
+}
+
+function getClaudeUsage(): ClaudeUsage {
+  const now = new Date()
+  const renewalDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
+  const empty: ClaudeUsage = { sessions: 0, messages: 0, sonnetTokens: 0, opusTokens: 0, haikuTokens: 0, totalTokens: 0, renewalDate }
+
+  const projectsDir = join(homedir(), '.claude', 'projects')
+  if (!existsSync(projectsDir)) return empty
+
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  let sessions = 0, messages = 0, sonnetTokens = 0, opusTokens = 0, haikuTokens = 0
+
+  function processFile(filePath: string) {
+    try {
+      const st = statSync(filePath)
+      if (st.mtimeMs < sevenDaysAgo || st.size > 10 * 1024 * 1024) return
+      sessions++
+      const lines = readFileSync(filePath, 'utf-8').split('\n')
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const obj = JSON.parse(line)
+          if (obj.type !== 'assistant') continue
+          const msg = obj.message
+          if (!msg?.usage) continue
+          const tokens = (msg.usage.input_tokens ?? 0) + (msg.usage.output_tokens ?? 0)
+          const model: string = msg.model ?? ''
+          messages++
+          if (model.includes('haiku')) haikuTokens += tokens
+          else if (model.includes('opus')) opusTokens += tokens
+          else sonnetTokens += tokens
+        } catch { /* skip malformed lines */ }
+      }
+    } catch { /* skip unreadable files */ }
+  }
+
+  try {
+    for (const projectDir of readdirSync(projectsDir)) {
+      const projectPath = join(projectsDir, projectDir)
+      try {
+        for (const entry of readdirSync(projectPath)) {
+          const entryPath = join(projectPath, entry)
+          if (entry.endsWith('.jsonl')) {
+            processFile(entryPath)
+          } else {
+            const subagentsPath = join(entryPath, 'subagents')
+            if (existsSync(subagentsPath)) {
+              try {
+                for (const sub of readdirSync(subagentsPath)) {
+                  if (sub.endsWith('.jsonl')) processFile(join(subagentsPath, sub))
+                }
+              } catch { /* skip */ }
+            }
+          }
+        }
+      } catch { /* skip project */ }
+    }
+  } catch { /* projects dir unreadable */ }
+
+  const totalTokens = sonnetTokens + opusTokens + haikuTokens
+  return { sessions, messages, sonnetTokens, opusTokens, haikuTokens, totalTokens, renewalDate }
+}
+
 export async function settingsRoutes(app: FastifyInstance) {
   app.get('/settings/status', async () => ({
     config: configExists(),
     pinchtab: await checkPinchTab(),
     claude: await checkClaudeCli(),
   }))
+
+  app.get('/settings/claude-usage', async () => getClaudeUsage())
 
   app.get('/settings/profile', async () => {
     const path = configPath('profile.yml')
