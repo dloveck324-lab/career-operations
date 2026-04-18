@@ -177,22 +177,17 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   const size = cx * 2
   const C = 2 * Math.PI * r
 
-  const segs = usage
-    ? [
-        { value: usage.sonnetTokens, color: '#6366f1' },
-        { value: usage.opusTokens,   color: '#a855f7' },
-        { value: usage.haikuTokens,  color: '#14b8a6' },
-      ].filter(s => s.value > 0)
-    : []
-  const total = segs.reduce((a, s) => a + s.value, 0)
+  // fill = sessions / 50, visual scale only (50 sessions ≈ full ring)
+  const [fill, setFill] = useState(0)
+  useEffect(() => {
+    if (usage === null) return
+    const target = Math.min(1, usage.sessions / 50)
+    const t = setTimeout(() => setFill(target), 80)
+    return () => clearTimeout(t)
+  }, [usage])
 
-  let accum = 0
-  const rendered = segs.map(seg => {
-    const len = (seg.value / total) * C
-    const item = { color: seg.color, dasharray: `${len} ${C - len}`, dashoffset: C - accum }
-    accum += len
-    return item
-  })
+  // strokeDashoffset controls arc length: C = empty, 0 = full circle
+  const dashoffset = C * (1 - fill)
 
   const renewalLabel = usage
     ? new Date(usage.renewalDate + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -201,7 +196,7 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   const tip = (
     <Box sx={{ fontSize: 11, lineHeight: 1.8, py: 0.25 }}>
       <Box>Sessions <strong>{usage?.sessions ?? '—'}</strong></Box>
-      <Box>Messages <strong>{usage?.messages ?? '—'}</strong></Box>
+      <Box>Weekly <strong>{usage?.messages ?? '—'}</strong></Box>
       <Box>Sonnet <strong>{usage ? fmtTokens(usage.sonnetTokens) + ' tok' : '—'}</strong></Box>
       <Box>~Renewal <strong>{renewalLabel}</strong></Box>
     </Box>
@@ -211,21 +206,19 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
     <Tooltip title={tip} arrow placement="bottom-end" slotProps={{ tooltip: { sx: { maxWidth: 160 } } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'default', px: 0.25 }}>
         <svg width={size} height={size} style={{ display: 'block' }}>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={sw} />
-          {total > 0 ? (
-            <g transform={`rotate(-90, ${cx}, ${cy})`}>
-              {rendered.map((seg, i) => (
-                <circle
-                  key={i} cx={cx} cy={cy} r={r} fill="none"
-                  stroke={seg.color} strokeWidth={sw}
-                  strokeDasharray={seg.dasharray}
-                  strokeDashoffset={seg.dashoffset}
-                />
-              ))}
-            </g>
-          ) : (
-            <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} strokeDasharray="3 3" />
-          )}
+          {/* Gray background ring */}
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={sw} />
+          {/* Usage arc — draws from 12 o'clock, animates in on load */}
+          <g transform={`rotate(-90, ${cx}, ${cy})`}>
+            <circle
+              cx={cx} cy={cy} r={r}
+              fill="none" stroke="#6366f1" strokeWidth={sw}
+              strokeLinecap="round"
+              strokeDasharray={`${C}`}
+              strokeDashoffset={dashoffset}
+              style={{ transition: 'stroke-dashoffset 0.75s cubic-bezier(0.4, 0, 0.2, 1)' }}
+            />
+          </g>
         </svg>
       </Box>
     </Tooltip>
