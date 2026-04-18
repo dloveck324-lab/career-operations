@@ -218,8 +218,8 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
     <Tooltip title={tip} arrow placement="bottom-end" slotProps={{ tooltip: { sx: { maxWidth: 160 } } }}>
       <Box sx={(theme) => ({
         display: 'flex', alignItems: 'center', cursor: 'default',
-        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)',
-        borderRadius: '50%',
+        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.12)',
+        borderRadius: '6px',
         p: '4px',
       })}>
         <svg width={size} height={size} style={{ display: 'block' }}>
