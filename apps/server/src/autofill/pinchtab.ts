@@ -91,11 +91,11 @@ export class PinchTabClient {
     await new Promise(r => setTimeout(r, 1000))
   }
 
-  async startProfile(profileName: string, headless: boolean): Promise<InstanceInfo | null> {
+  async startProfile(profileName: string, headless: boolean, port = '9868'): Promise<InstanceInfo | null> {
     const res = await fetch(`${this.cfg.serverUrl}/profiles/${profileName}/start`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({ headless }),
+      body: JSON.stringify({ headless, port }),
       signal: AbortSignal.timeout(30_000),
     })
     if (!res.ok) {
@@ -131,21 +131,28 @@ export class PinchTabClient {
 
   /**
    * Ensure a running instance for the given profile in the desired mode.
-   * Returns the instance URL to use for browser control.
+   * Always stops every other instance first so ours lands on the CLI's default
+   * port (9868). Returns the instance URL.
    */
   async ensureInstance(profileName = 'default', headless = true): Promise<string> {
     const instances = await this.listInstances()
-    const existing = instances.find(i => i.profileName === profileName && i.status === 'running')
+    const ours = instances.find(i => i.profileName === profileName && i.status === 'running')
 
-    if (existing && existing.headless === headless) {
-      return existing.url
+    // Stop every running instance that isn't already ours in the right mode
+    for (const inst of instances) {
+      if (inst.status !== 'running') continue
+      if (inst.profileName === profileName && inst.headless === headless && inst.port === '9868') {
+        continue // ours, already good
+      }
+      await this.stopProfile(inst.profileId)
     }
 
-    if (existing) {
-      // Mode mismatch — stop and restart in desired mode
-      await this.stopProfile(existing.profileId)
-    }
+    // Re-read after stops
+    const after = await this.listInstances()
+    const alive = after.find(i => i.profileName === profileName && i.status === 'running' && i.headless === headless && i.port === '9868')
+    if (alive) return alive.url
 
+    // Nothing usable on 9868 → start fresh
     const started = await this.startProfile(profileName, headless)
     if (!started?.url) throw new Error('Failed to start PinchTab instance')
     await this.waitForInstanceReady(started.url)

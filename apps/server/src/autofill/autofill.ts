@@ -36,9 +36,10 @@ export async function startAutofill(job: Job, opts: { model?: AutofillModel } = 
     return { ok: false, model, durationMs: 0, message: 'PinchTab not reachable — run: pinchtab daemon install' }
   }
 
+  let instanceUrl: string
   try {
-    const url = await client.ensureInstance('default', false)
-    console.log(`[autofill] headed Chrome ready at ${url}`)
+    instanceUrl = await client.ensureInstance('default', false)
+    console.log(`[autofill] headed Chrome ready at ${instanceUrl}`)
   } catch (err) {
     console.error('[autofill] ensureInstance failed:', err)
     return { ok: false, model, durationMs: 0, message: `PinchTab instance start failed: ${(err as Error).message}` }
@@ -51,7 +52,7 @@ export async function startAutofill(job: Job, opts: { model?: AutofillModel } = 
     return { ok: false, model, durationMs: 0, message: 'No candidate profile loaded (config/profile.yml)' }
   }
 
-  const prompt = buildAgentPrompt(job, profile, cv)
+  const prompt = buildAgentPrompt(job, profile, cv, instanceUrl)
   console.log(`[autofill] spawning claude (${MODEL_IDS[model]}), prompt=${prompt.length} chars`)
 
   const result = await runClaudeAgent(prompt, model)
@@ -60,10 +61,16 @@ export async function startAutofill(job: Job, opts: { model?: AutofillModel } = 
   return { ok: result.ok, model, durationMs, message: result.message }
 }
 
-function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv: string | null): string {
+function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv: string | null, instanceUrl: string): string {
   if (!profile) return ''
   const p = profile.candidate
-  return `You are an autonomous job-application agent. Use the \`pinchtab\` CLI (already installed, authenticated, and pointing at a running headed Chrome instance) to open the job page below and fill out its application form as completely and accurately as possible.
+  return `You are an autonomous job-application agent. Use the \`pinchtab\` CLI (already installed, authenticated, and pointing at a running *headed* Chrome instance) to open the job page below and fill out its application form as completely and accurately as possible.
+
+## PinchTab environment (IMPORTANT — do not change it)
+- A *headed* Chrome instance is already running at \`${instanceUrl}\` (this is the CLI's default, port 9868), so plain \`pinchtab nav\` / \`pinchtab snap\` / etc. target it automatically. Do not pass \`--server\`.
+- DO NOT run \`pinchtab daemon ...\` commands (no restart/install/status). The daemon is already healthy; restarting it will destroy the headed browser.
+- DO NOT stop, start, or list instances. Do not kill processes. If a command returns empty or unexpected output, re-snapshot and retry — do not assume the daemon is broken.
+- If \`pinchtab nav\` returns a \`navigation_changed\` error, that means the page navigated after you clicked something — treat it as success and re-snapshot.
 
 ## Job
 - Title: ${job.title}
