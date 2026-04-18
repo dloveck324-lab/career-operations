@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import {
   Box, Tabs, Tab, Typography, Paper, Stack, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, IconButton,
-  TextField, Divider,
+  TextField, Divider, Switch, Button, CircularProgress,
+  ToggleButtonGroup, ToggleButton, Alert,
 } from '@mui/material'
-import { Delete, CheckCircle, Error } from '@mui/icons-material'
-import { api } from '../api.js'
+import { Delete, CheckCircle, Error, AlarmOn } from '@mui/icons-material'
+import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
 import { PortalsForm } from '../components/PortalsForm.js'
 import { FiltersForm } from '../components/FiltersForm.js'
@@ -39,6 +40,7 @@ export function SettingsPage() {
           <Tab label="Filters" />
           <Tab label="CV" />
           <Tab label="Field Mappings" />
+          <Tab label="Automation" icon={<AlarmOn sx={{ fontSize: 16 }} />} iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
@@ -47,6 +49,7 @@ export function SettingsPage() {
           {tab === 2 && <FiltersForm />}
           {tab === 3 && <CvForm />}
           {tab === 4 && <FieldMappingsTab />}
+          {tab === 5 && <AutomationTab />}
         </Box>
       </Paper>
     </Box>
@@ -64,6 +67,170 @@ function StatusBadge({ ok, label, hint }: { ok?: boolean; label: string; hint: s
       variant="outlined"
       sx={{ fontSize: '0.75rem' }}
     />
+  )
+}
+
+function AutomationTab() {
+  const [status, setStatus] = useState<AutomationStatus | null>(null)
+  const [config, setConfig] = useState<AutomationConfig | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.settings.automation().then(data => {
+      const { lastScanAt, nextScanAt, keepAwakeSupported, ...cfg } = data
+      setConfig(cfg)
+      setStatus(data)
+    }).catch(() => null)
+  }, [])
+
+  const save = async () => {
+    if (!config) return
+    setSaving(true)
+    try {
+      await api.settings.saveAutomation(config)
+      const fresh = await api.settings.automation()
+      setStatus(fresh)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const update = (patch: Partial<AutomationConfig>) =>
+    setConfig(c => c ? { ...c, ...patch } : c)
+
+  if (!config || !status) return <CircularProgress size={20} />
+
+  return (
+    <Stack spacing={3}>
+      {/* Auto Scan */}
+      <Paper variant="outlined" sx={{ p: 2.5 }}>
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Box>
+              <Typography variant="subtitle2">Auto Scan</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Runs a scan automatically at a regular interval
+              </Typography>
+            </Box>
+            <Switch
+              checked={config.autoScan.enabled}
+              onChange={e => update({ autoScan: { ...config.autoScan, enabled: e.target.checked } })}
+            />
+          </Stack>
+
+          {config.autoScan.enabled && (
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <Typography variant="body2" color="text.secondary">Every</Typography>
+              <TextField
+                type="number"
+                size="small"
+                value={config.autoScan.intervalHours}
+                onChange={e => update({ autoScan: { ...config.autoScan, intervalHours: Math.max(1, Number(e.target.value)) } })}
+                inputProps={{ min: 1, max: 168 }}
+                sx={{ width: 80 }}
+              />
+              <Typography variant="body2" color="text.secondary">hours</Typography>
+            </Stack>
+          )}
+
+          {config.autoScan.enabled && status.nextScanAt && (
+            <Typography variant="caption" color="text.secondary">
+              Next scan: {new Date(status.nextScanAt).toLocaleString()}
+              {status.lastScanAt && ` · Last: ${new Date(status.lastScanAt).toLocaleString()}`}
+            </Typography>
+          )}
+        </Stack>
+      </Paper>
+
+      {/* Auto Evaluate */}
+      <Paper variant="outlined" sx={{ p: 2.5 }}>
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Box>
+              <Typography variant="subtitle2">Auto Evaluate</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Evaluates inbox jobs a few minutes after each scan completes
+              </Typography>
+            </Box>
+            <Switch
+              checked={config.autoEvaluate.enabled}
+              onChange={e => update({ autoEvaluate: { ...config.autoEvaluate, enabled: e.target.checked } })}
+            />
+          </Stack>
+
+          {config.autoEvaluate.enabled && (
+            <Stack spacing={2}>
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Typography variant="body2" color="text.secondary">Wait</Typography>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={config.autoEvaluate.delayMinutes}
+                  onChange={e => update({ autoEvaluate: { ...config.autoEvaluate, delayMinutes: Math.max(1, Number(e.target.value)) } })}
+                  inputProps={{ min: 1, max: 1440 }}
+                  sx={{ width: 80 }}
+                />
+                <Typography variant="body2" color="text.secondary">minutes after scan finishes</Typography>
+              </Stack>
+
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>Model</Typography>
+                <ToggleButtonGroup
+                  value={config.autoEvaluate.model}
+                  exclusive
+                  onChange={(_, v) => { if (v) update({ autoEvaluate: { ...config.autoEvaluate, model: v } }) }}
+                  size="small"
+                >
+                  <ToggleButton value="haiku">Quick (Haiku)</ToggleButton>
+                  <ToggleButton value="sonnet">Deep (Sonnet)</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            </Stack>
+          )}
+        </Stack>
+      </Paper>
+
+      {/* Keep Awake */}
+      <Paper variant="outlined" sx={{ p: 2.5 }}>
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Box>
+              <Typography variant="subtitle2">Keep Awake</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Prevents the computer from sleeping while the server is running
+              </Typography>
+            </Box>
+            <Switch
+              checked={config.keepAwake.enabled}
+              disabled={!status.keepAwakeSupported}
+              onChange={e => update({ keepAwake: { enabled: e.target.checked } })}
+            />
+          </Stack>
+
+          {!status.keepAwakeSupported && (
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              Keep Awake uses <code>caffeinate</code> and is only supported on macOS.
+            </Alert>
+          )}
+        </Stack>
+      </Paper>
+
+      <Stack direction="row" justifyContent="flex-end">
+        <Button
+          variant="contained"
+          onClick={save}
+          disabled={saving}
+          startIcon={saving
+            ? <CircularProgress size={14} color="inherit" />
+            : saved ? <CheckCircle sx={{ fontSize: 16 }} /> : undefined}
+        >
+          {saved ? 'Saved' : 'Save'}
+        </Button>
+      </Stack>
+    </Stack>
   )
 }
 

@@ -6,6 +6,16 @@ import { startScanRun, updateScanRun } from '../db/queries.js'
 const sseClients = new Set<FastifyReply>()
 let scanPauseRequested = false
 
+const scanCompletionHandlers: Array<() => void> = []
+
+export function onScanComplete(cb: () => void): () => void {
+  scanCompletionHandlers.push(cb)
+  return () => {
+    const idx = scanCompletionHandlers.indexOf(cb)
+    if (idx >= 0) scanCompletionHandlers.splice(idx, 1)
+  }
+}
+
 export function broadcastScanEvent(event: ScanEvent) {
   const data = `data: ${JSON.stringify(event)}\n\n`
   for (const client of sseClients) {
@@ -57,6 +67,9 @@ export async function scanRoutes(app: FastifyInstance) {
         status: result.paused ? 'paused' : 'done',
       })
       broadcastScanEvent({ type: result.paused ? 'scan_paused' : 'done', runId, ...result })
+      if (!result.paused) {
+        for (const handler of [...scanCompletionHandlers]) handler()
+      }
     }).catch(err => {
       scanPauseRequested = false
       updateScanRun(runId, { ended_at: new Date().toISOString(), status: 'failed' })

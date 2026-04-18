@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
 import { PinchTabClient } from '../autofill/pinchtab.js'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import yaml from 'js-yaml'
 import { configExists } from '@job-pipeline/core'
+import { scheduler } from '../automation/scheduler.js'
 
 const CONFIG_DIR = resolve(process.cwd(), '../../config')
 mkdirSync(CONFIG_DIR, { recursive: true })
@@ -93,6 +95,27 @@ export async function settingsRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const { db } = await import('../db/schema.js')
     db.prepare('DELETE FROM field_mappings WHERE id = ?').run(Number(id))
+    return { ok: true }
+  })
+
+  app.get('/settings/automation', async () => {
+    return scheduler.getStatus()
+  })
+
+  app.put('/settings/automation', async (req) => {
+    const body = z.object({
+      autoScan: z.object({
+        enabled: z.boolean(),
+        intervalHours: z.number().int().min(1).max(168),
+      }),
+      autoEvaluate: z.object({
+        enabled: z.boolean(),
+        delayMinutes: z.number().int().min(1).max(1440),
+        model: z.enum(['haiku', 'sonnet']),
+      }),
+      keepAwake: z.object({ enabled: z.boolean() }),
+    }).parse(req.body)
+    scheduler.configure(body)
     return { ok: true }
   })
 }

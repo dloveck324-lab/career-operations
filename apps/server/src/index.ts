@@ -10,6 +10,8 @@ import { portalsRoutes } from './routes/portals.js'
 import { configExists } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
 import { getTokenUsage } from './db/queries.js'
+import { scheduler } from './automation/scheduler.js'
+import { onScanComplete } from './routes/scan.js'
 
 const app = Fastify({ logger: { level: 'warn' } })
 
@@ -63,3 +65,5 @@ if (!cfg.profile || !cfg.cv || !cfg.filters) {
 const PORT = Number(process.env.PORT ?? 3001)
 await app.listen({ port: PORT, host: '127.0.0.1' })
 console.log(`Server running on http://127.0.0.1:${PORT}`)
+
+scheduler.init(PORT, onScanComplete)

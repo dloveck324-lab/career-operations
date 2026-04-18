@@ -43,6 +43,18 @@ export interface ImportResult { profile: boolean; cv: boolean; filters: boolean;
 export interface AutofillResult { ok: boolean; filled: number; unfilled: number; cached: number; message: string }
 export interface DiscoveredPortal { name: string; type: string; company_id: string; url: string; notes: string; source: string }
 
+export interface AutomationConfig {
+  autoScan: { enabled: boolean; intervalHours: number }
+  autoEvaluate: { enabled: boolean; delayMinutes: number; model: 'haiku' | 'sonnet' }
+  keepAwake: { enabled: boolean }
+}
+
+export interface AutomationStatus extends AutomationConfig {
+  lastScanAt: string | null
+  nextScanAt: string | null
+  keepAwakeSupported: boolean
+}
+
 export const api = {
   health: () => req<Health>('/health'),
   jobs: (status?: JobStatus) => req<Job[]>(`/jobs${status ? `?status=${status}` : ''}`),
@@ -74,6 +86,8 @@ export const api = {
     saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
     fieldMappings: () => req<unknown[]>('/settings/field-mappings'),
     deleteMapping: (id: number) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'DELETE' }),
+    automation: () => req<AutomationStatus>('/settings/automation'),
+    saveAutomation: (data: AutomationConfig) => req<{ ok: boolean }>('/settings/automation', { method: 'PUT', body: JSON.stringify(data) }),
   },
   portals: {
     discover: () => req<{ portals: DiscoveredPortal[] }>('/portals/discover'),
