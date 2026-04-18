@@ -2,7 +2,7 @@ import {
   Drawer, Box, Typography, Stack, Chip, Button, IconButton,
   Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
 } from '@mui/material'
-import { Close, OpenInNew, Send, SkipNext, Assessment, Refresh, ArrowDropDown } from '@mui/icons-material'
+import { Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown } from '@mui/icons-material'
 import { useState, useMemo } from 'react'
 import { marked } from 'marked'
 import { api, type Job } from '../api.js'
@@ -77,15 +77,6 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     if (!job) return
     setLoading('skip')
     await api.updateStatus(job.id, 'skipped')
-    setLoading(null)
-    onStatusChange()
-    onClose()
-  }
-
-  const handleRequeue = async () => {
-    if (!job) return
-    setLoading('requeue')
-    await api.requeue([job.id])
     setLoading(null)
     onStatusChange()
     onClose()
@@ -179,40 +170,36 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
               </Button>
             </Stack>
           ) : (
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Button
-                variant="contained"
-                startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
-                onClick={() => handleApply(false)}
-                disabled={!!loading}
-                size="small"
-              >
-                Auto Fill
-              </Button>
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+              <ButtonGroup size="small" variant="contained" disabled={!!loading}>
+                <Button
+                  startIcon={loading === 'apply' ? <CircularProgress size={14} color="inherit" /> : <Send />}
+                  onClick={() => handleApply(false)}
+                >
+                  Auto Fill
+                </Button>
+                <Button sx={{ px: 0.5 }} onClick={e => setAutofillAnchor(e.currentTarget)}>
+                  <ArrowDropDown fontSize="small" />
+                </Button>
+              </ButtonGroup>
+              <Menu anchorEl={autofillAnchor} open={Boolean(autofillAnchor)} onClose={() => setAutofillAnchor(null)}>
+                <MenuItem onClick={() => handleApply(false)}>Background</MenuItem>
+                <MenuItem onClick={() => handleApply(true)}>Visible</MenuItem>
+              </Menu>
+
               {job.status === 'evaluated' && (
                 <Button
                   variant="contained"
                   color="success"
-                  startIcon={loading === 'applied' ? <CircularProgress size={14} color="inherit" /> : <Send />}
+                  startIcon={loading === 'applied' ? <CircularProgress size={14} color="inherit" /> : <CheckCircle />}
                   onClick={handleMarkApplied}
                   disabled={!!loading}
                   size="small"
                 >
-                  Mark Applied
+                  Applied
                 </Button>
               )}
-              {job.status === 'evaluated' && (
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={loading === 'requeue' ? <CircularProgress size={14} color="inherit" /> : <Refresh />}
-                  onClick={handleRequeue}
-                  disabled={!!loading}
-                  size="small"
-                >
-                  Re-queue
-                </Button>
-              )}
+
               <Button
                 variant="text"
                 color="inherit"
