@@ -112,6 +112,9 @@ function getWittyMessage(): string {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+// Computed once when the module loads — stable for the entire browser session.
+const SESSION_WITTY_MESSAGE = getWittyMessage()
+
 // ─── Logo + company avatar ─────────────────────────────────────────────────────
 function getLogoUrl(url?: string): string | null {
   try {
@@ -302,7 +305,7 @@ export function PipelinePage() {
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<HTMLElement | null>(null)
   const [claudeUsage, setClaudeUsage] = useState<ClaudeUsage | null>(null)
   const greeting = useMemo(() => getGreeting(), [])
-  const wittyMessage = useMemo(() => getWittyMessage(), [])
+  const wittyMessage = SESSION_WITTY_MESSAGE
 
   // Scan / evaluate state
   const [scanning, setScanning] = useState(false)
