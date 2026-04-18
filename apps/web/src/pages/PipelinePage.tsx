@@ -4,7 +4,7 @@ import {
   TextField, InputAdornment, Button, CircularProgress, Avatar,
   IconButton, ButtonGroup, Tooltip, Popover, ToggleButtonGroup,
   ToggleButton, Select, MenuItem, FormControl, InputLabel,
-  Autocomplete, Divider, Menu,
+  Autocomplete, Divider, Menu, Snackbar, Alert,
 } from '@mui/material'
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
@@ -244,6 +244,9 @@ export function PipelinePage() {
   const [evalCompany, setEvalCompany] = useState<string | null>(null)
   const [companies, setCompanies] = useState<string[]>([])
 
+  // Scan result toast
+  const [scanToast, setScanToast] = useState<{ added: number; existing: number; closed: number; paused: boolean } | null>(null)
+
   // Automation badge
   const [autoScanLabel, setAutoScanLabel] = useState<string | null>(null)
 
@@ -291,11 +294,13 @@ export function PipelinePage() {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
         setProgress(`Done — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`)
+        setScanToast({ added: evt.added ?? 0, existing: evt.existing ?? 0, closed, paused: false })
       }
       if (evt.type === 'scan_paused') {
         setScanning(false)
         const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
         setProgress(`Paused — re-scan: ${evt.existing ?? 0} · new: ${evt.added ?? 0} · closed: ${closed}`)
+        setScanToast({ added: evt.added ?? 0, existing: evt.existing ?? 0, closed, paused: true })
       }
       if (evt.type === 'eval_start') { setEvaluating(true); setProgress(`Evaluating ${evt.done ?? 0}/${evt.total ?? 0}: ${evt.company}`) }
       if (evt.type === 'eval_done') { setProgress(`Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`) }
@@ -705,6 +710,26 @@ export function PipelinePage() {
         onClose={() => setSelected(null)}
         onStatusChange={() => { loadJobs(); loadStats() }}
       />
+
+      <Snackbar
+        open={scanToast !== null}
+        autoHideDuration={null}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={scanToast?.paused ? 'warning' : 'success'}
+          variant="filled"
+          onClose={() => setScanToast(null)}
+          sx={{ minWidth: 280 }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {scanToast?.paused ? 'Scan paused' : 'Scan complete'}
+          </Typography>
+          <Typography variant="body2">
+            {scanToast?.added ?? 0} new &nbsp;·&nbsp; {scanToast?.existing ?? 0} re-scanned &nbsp;·&nbsp; {scanToast?.closed ?? 0} closed
+          </Typography>
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
