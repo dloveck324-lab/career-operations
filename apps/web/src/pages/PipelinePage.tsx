@@ -783,13 +783,13 @@ export function PipelinePage() {
         onStatusChange={() => { loadJobs(); loadStats() }}
       />
 
-      <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+      <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity={scanToast?.severity ?? 'info'} variant="filled" onClose={() => setScanToast(null)} sx={{ minWidth: 280 }}>
           {scanToast?.text}
         </Alert>
       </Snackbar>
 
-      <Snackbar open={evalToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+      <Snackbar open={evalToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity={evalToast?.severity ?? 'info'} variant="filled" onClose={() => setEvalToast(null)} sx={{ minWidth: 280 }}>
           {evalToast?.text}
         </Alert>
