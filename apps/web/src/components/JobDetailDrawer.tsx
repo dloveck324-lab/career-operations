@@ -24,9 +24,10 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     const raw = job?.content?.cleaned_md ?? job?.content?.raw_text ?? ''
     const text = raw.slice(0, 6000)
     if (text.trimStart().startsWith('<')) return text
-    // Normalize whitespace-only lines (e.g. "\n \n") into proper blank lines
-    const normalized = text.replace(/\n[ \t]*\n/g, '\n\n')
-    // breaks: true renders single \n as <br> without forcing paragraph splits
+    const normalized = text
+      .replace(/\n[ \t]*\n/g, '\n\n')                // "\n \n" → proper blank lines
+      .replace(/^[ \t]*\*(?=[^\s*])/gm, '- ')        // "*Bullet" → "- Bullet" (markdown list)
+      .replace(/^[ \t]*\*(?= )/gm, '-')              // "* Bullet" → "- Bullet" (standardize)
     return marked.parse(normalized, { breaks: true }) as string
   }, [job?.content?.cleaned_md, job?.content?.raw_text])
 
