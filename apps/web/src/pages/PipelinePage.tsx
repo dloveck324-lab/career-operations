@@ -229,6 +229,9 @@ export function PipelinePage() {
   const [evalCompany, setEvalCompany] = useState<string | null>(null)
   const [companies, setCompanies] = useState<string[]>([])
 
+  // Automation badge
+  const [autoScanLabel, setAutoScanLabel] = useState<string | null>(null)
+
   // Table state
   const [tab, setTab] = useState(0)
   const [jobs, setJobs] = useState<Job[]>([])
@@ -242,6 +245,12 @@ export function PipelinePage() {
   const [positiveKeywords, setPositiveKeywords] = useState<string[]>([])
 
   const selectedIds = selectionModel as number[]
+
+  useEffect(() => {
+    api.settings.automation().then(cfg => {
+      setAutoScanLabel(cfg.autoScan.enabled ? `AUTO - ${cfg.autoScan.intervalHours}H` : null)
+    }).catch(() => {})
+  }, [])
 
   // Load first name from profile (candidate.full_name)
   useEffect(() => {
@@ -442,6 +451,10 @@ export function PipelinePage() {
 
           {/* Action buttons */}
           <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0, mt: 0.5 }}>
+            {autoScanLabel && (
+              <Chip label={autoScanLabel} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.65rem', fontWeight: 700, height: 24 }} />
+            )}
+
             {/* SCAN — fixed-width box keeps layout stable between idle and scanning states */}
             <Box sx={{ width: 148, display: 'flex' }}>
               {scanning ? (
