@@ -211,10 +211,29 @@ function toApplyUrl(url: string): string {
   try {
     const u = new URL(url)
     const path = u.pathname.replace(/\/$/, '')
+
+    // Lever: /<company>/<id>          → /<company>/<id>/apply
     if (u.hostname.endsWith('jobs.lever.co') && !path.endsWith('/apply')) {
       u.pathname = `${path}/apply`
       return u.toString()
     }
+
+    // Ashby: /<company>/<id>          → /<company>/<id>/application
+    if (u.hostname.endsWith('jobs.ashbyhq.com') && !/\/application$/.test(path)) {
+      // Only rewrite if we're at a job-detail path (3 segments: company/jobId or similar)
+      const segs = path.split('/').filter(Boolean)
+      if (segs.length >= 2) {
+        u.pathname = `${path}/application`
+        return u.toString()
+      }
+    }
+
+    // Workable: /<company>/j/<id>     → /<company>/j/<id>/apply
+    if (u.hostname.endsWith('workable.com') && /\/j\//.test(path) && !path.endsWith('/apply')) {
+      u.pathname = `${path}/apply`
+      return u.toString()
+    }
+
     return url
   } catch {
     return url
