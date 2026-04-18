@@ -72,24 +72,24 @@ export class PinchTabClient {
   }
 
   async navigate(url: string): Promise<void> {
-    await this.instancePost('/nav', { url })
+    await this.instancePost('/navigate', { url })
   }
 
   async snap(): Promise<SnapResult> {
-    const res = await this.instancePost('/snap', { interactive: true, clickable: true })
+    const res = await this.instanceGet('/snapshot', { filter: 'interactive', format: 'compact' })
     return res as SnapResult
   }
 
   async fill(ref: string, value: string): Promise<void> {
-    await this.instancePost('/fill', { ref, value })
+    await this.instancePost('/action', { kind: 'fill', selector: ref, text: value })
   }
 
   async click(ref: string): Promise<void> {
-    await this.instancePost('/click', { ref })
+    await this.instancePost('/action', { kind: 'click', selector: ref })
   }
 
   async getText(): Promise<string> {
-    const res = await this.instancePost('/text', {}) as { text?: string }
+    const res = await this.instanceGet('/text', {}) as { text?: string }
     return res.text ?? ''
   }
 
@@ -99,6 +99,20 @@ export class PinchTabClient {
       headers: this.headers,
       signal: AbortSignal.timeout(5_000),
     })
+  }
+
+  private async instanceGet(path: string, params: Record<string, string>): Promise<unknown> {
+    const url = new URL(`${this.cfg.instanceUrl}${path}`)
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+    const res = await fetch(url.toString(), {
+      headers: this.headers,
+      signal: AbortSignal.timeout(this.cfg.timeoutMs),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`PinchTab ${path}: HTTP ${res.status} — ${text.slice(0, 200)}`)
+    }
+    return res.json().catch(() => ({}))
   }
 
   private async instancePost(path: string, body: object): Promise<unknown> {
