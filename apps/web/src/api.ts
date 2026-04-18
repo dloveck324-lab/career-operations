@@ -12,7 +12,7 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export type JobStatus = 'scanned' | 'prescreened' | 'evaluated' | 'applied' | 'interview' | 'completed' | 'skipped'
+export type JobStatus = 'scanned' | 'prescreened' | 'evaluated' | 'ready_to_submit' | 'applied' | 'interview' | 'completed' | 'skipped'
 
 export interface Job {
   id: number
@@ -38,10 +38,10 @@ export interface Job {
 
 export interface TokenUsage { prompt: number; completion: number; total: number }
 export interface Health { ok: boolean; config: { profile: boolean; cv: boolean; filters: boolean }; tokens: TokenUsage }
-export interface Stats { scanned?: number; prescreened?: number; evaluated?: number; applied?: number; interview?: number; completed?: number; skipped?: number }
+export interface Stats { scanned?: number; prescreened?: number; evaluated?: number; ready_to_submit?: number; applied?: number; interview?: number; completed?: number; skipped?: number }
 export interface ImportResult { profile: boolean; cv: boolean; filters: boolean; fieldMappings: number; warnings: string[] }
 export type AutofillModel = 'haiku' | 'sonnet' | 'opus'
-export interface AutofillResult { ok: boolean; message: string; model: AutofillModel; durationMs: number }
+export interface AutofillResult { ok: boolean; message: string; model: AutofillModel; durationMs: number; status: 'ready_to_submit' | 'failed' }
 export interface DiscoveredPortal { name: string; type: string; company_id: string; url: string; notes: string; source: string }
 
 export interface AutomationConfig {

@@ -85,6 +85,7 @@ export type JobStatus =
   | 'scanned'
   | 'prescreened'
   | 'evaluated'
+  | 'ready_to_submit'
   | 'applied'
   | 'interview'
   | 'completed'

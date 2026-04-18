@@ -26,6 +26,7 @@ interface ScanEvent { type: string; existing?: number; added?: number; reskipped
 const TABS: Array<{ label: string; statuses: JobStatus[] }> = [
   { label: 'Inbox',     statuses: ['scanned', 'prescreened'] },
   { label: 'Evaluated', statuses: ['evaluated'] },
+  { label: 'Ready to Submit', statuses: ['ready_to_submit'] },
   { label: 'Applied',   statuses: ['applied'] },
   { label: 'Interview', statuses: ['interview'] },
   { label: 'Closed',    statuses: ['completed', 'skipped'] },
@@ -37,6 +38,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   scanned: '#6b7280',
   prescreened: '#6366f1',
   evaluated: '#22d3ee',
+  ready_to_submit: '#a855f7',
   applied: '#22c55e',
   interview: '#f59e0b',
   completed: '#10b981',

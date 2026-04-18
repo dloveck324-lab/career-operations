@@ -41,6 +41,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     try {
       const result = await api.apply(job.id, model)
       setMessage(result.message)
+      if (result.status === 'ready_to_submit') onStatusChange()
     } catch (err) {
       setMessage(`Error: ${err}`)
     } finally {
@@ -189,7 +190,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                 <MenuItem onClick={() => handleApply('opus')}>Opus (best)</MenuItem>
               </Menu>
 
-              {job.status === 'evaluated' && (
+              {(job.status === 'evaluated' || job.status === 'ready_to_submit') && (
                 <Button
                   variant="contained"
                   color="success"

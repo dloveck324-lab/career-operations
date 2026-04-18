@@ -5,7 +5,7 @@ import {
   type JobStatus,
 } from '../db/queries.js'
 
-const JOB_STATUSES: JobStatus[] = ['scanned', 'prescreened', 'evaluated', 'applied', 'interview', 'completed', 'skipped']
+const JOB_STATUSES: JobStatus[] = ['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']
 
 export async function jobRoutes(app: FastifyInstance) {
   app.get('/jobs', async (req) => {
@@ -30,7 +30,7 @@ export async function jobRoutes(app: FastifyInstance) {
   app.post('/jobs/bulk-status', async (req) => {
     const body = z.object({
       ids: z.array(z.number()),
-      status: z.enum(['scanned', 'prescreened', 'evaluated', 'applied', 'interview', 'completed', 'skipped']),
+      status: z.enum(['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']),
     }).parse(req.body)
     const count = bulkUpdateStatus(body.ids, body.status as JobStatus)
     return { count }
@@ -45,7 +45,7 @@ export async function jobRoutes(app: FastifyInstance) {
   app.patch('/jobs/:id/status', async (req) => {
     const { id } = req.params as { id: string }
     const body = z.object({
-      status: z.enum(['scanned', 'prescreened', 'evaluated', 'applied', 'interview', 'completed', 'skipped']),
+      status: z.enum(['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']),
       skip_reason: z.string().optional(),
     }).parse(req.body)
 

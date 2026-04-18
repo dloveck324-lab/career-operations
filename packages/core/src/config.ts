@@ -13,6 +13,16 @@ export interface CandidateProfile {
   linkedin?: string
   portfolio_url?: string
   github?: string
+  gender?: string
+  pronouns?: string
+  race_ethnicity?: string
+  veteran_status?: string
+  disability_status?: string
+  work_authorization?: string
+  requires_sponsorship?: string
+  current_company?: string
+  years_of_experience?: string
+  how_did_you_hear?: string
 }
 
 export interface ProfileConfig {
