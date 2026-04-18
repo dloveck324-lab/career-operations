@@ -145,16 +145,26 @@ async function runClaudeAgent(prompt: string, model: AutofillModel): Promise<{ o
         buf = buf.slice(nl + 1)
         if (!line) continue
         try {
-          const ev = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type: string; text?: string; name?: string; input?: unknown }> }; subtype?: string; result?: string }
-          if (ev.type === 'assistant' && ev.message?.content) {
-            for (const c of ev.message.content) {
-              if (c.type === 'text' && c.text) finalText += c.text
-              if (c.type === 'tool_use') console.log(`[autofill] tool_use: ${c.name}`)
-            }
-          } else if (ev.type === 'result') {
-            if (ev.result) finalText = ev.result
-          } else if (ev.type === 'system') {
+          const ev = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }; subtype?: string; result?: string }
+          if (ev.type === 'system' && ev.subtype === 'init') {
             console.log(`[autofill] claude session started`)
+          } else if (ev.type === 'assistant' && ev.message?.content) {
+            for (const c of ev.message.content) {
+              if (c.type === 'text' && c.text?.trim()) {
+                const snippet = c.text.trim().slice(0, 200).replace(/\s+/g, ' ')
+                console.log(`[autofill] thinking: ${snippet}${c.text.length > 200 ? '…' : ''}`)
+                finalText += c.text
+              }
+              if (c.type === 'tool_use') {
+                const input = c.input ?? {}
+                let hint = ''
+                if (typeof input.command === 'string') hint = ` → ${input.command.slice(0, 120)}`
+                else if (typeof input.url === 'string') hint = ` → ${input.url}`
+                console.log(`[autofill] tool: ${c.name}${hint}`)
+              }
+            }
+          } else if (ev.type === 'result' && ev.result) {
+            finalText = ev.result
           }
         } catch { /* non-JSON line */ }
       }
