@@ -23,12 +23,50 @@ export interface ClaudeUsage {
   haikuTokens: number
   totalTokens: number
   renewalDate: string
+  // From claude.ai OAuth API — null if unavailable
+  weeklyUtilization: number | null
+  weeklyResetsAt: string | null
+  sonnetUtilization: number | null
+  opusUtilization: number | null
 }
 
-function getClaudeUsage(): ClaudeUsage {
+interface OAuthWindow { utilization: number; resets_at?: string }
+interface OAuthUsageData {
+  five_hour?: OAuthWindow
+  seven_day?: OAuthWindow
+  seven_day_sonnet?: OAuthWindow
+  seven_day_opus?: OAuthWindow
+  [key: string]: unknown
+}
+
+let oauthCache: { data: OAuthUsageData; fetchedAt: number } | null = null
+
+async function fetchOAuthUsage(): Promise<OAuthUsageData | null> {
+  if (oauthCache && Date.now() - oauthCache.fetchedAt < 2 * 60 * 1000) return oauthCache.data
+  try {
+    const credsPath = join(homedir(), '.claude', '.credentials.json')
+    if (!existsSync(credsPath)) return null
+    const creds = JSON.parse(readFileSync(credsPath, 'utf-8'))
+    const token = creds?.claude_ai_oauth?.accessToken
+    if (!token) return null
+    const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'anthropic-beta': 'oauth-2025-04-20',
+        'User-Agent': 'claude-code/2.1.114',
+      },
+    })
+    if (!res.ok) return null
+    const data = await res.json() as OAuthUsageData
+    oauthCache = { data, fetchedAt: Date.now() }
+    return data
+  } catch { return null }
+}
+
+function getLocalUsage(): Omit<ClaudeUsage, 'weeklyUtilization' | 'weeklyResetsAt' | 'sonnetUtilization' | 'opusUtilization'> {
   const now = new Date()
   const renewalDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
-  const empty: ClaudeUsage = { sessions: 0, messages: 0, sonnetTokens: 0, opusTokens: 0, haikuTokens: 0, totalTokens: 0, renewalDate }
+  const empty = { sessions: 0, messages: 0, sonnetTokens: 0, opusTokens: 0, haikuTokens: 0, totalTokens: 0, renewalDate }
 
   const projectsDir = join(homedir(), '.claude', 'projects')
   if (!existsSync(projectsDir)) return empty
@@ -41,8 +79,7 @@ function getClaudeUsage(): ClaudeUsage {
       const st = statSync(filePath)
       if (st.mtimeMs < sevenDaysAgo || st.size > 10 * 1024 * 1024) return
       sessions++
-      const lines = readFileSync(filePath, 'utf-8').split('\n')
-      for (const line of lines) {
+      for (const line of readFileSync(filePath, 'utf-8').split('\n')) {
         if (!line.trim()) continue
         try {
           const obj = JSON.parse(line)
@@ -55,9 +92,9 @@ function getClaudeUsage(): ClaudeUsage {
           if (model.includes('haiku')) haikuTokens += tokens
           else if (model.includes('opus')) opusTokens += tokens
           else sonnetTokens += tokens
-        } catch { /* skip malformed lines */ }
+        } catch { /* skip */ }
       }
-    } catch { /* skip unreadable files */ }
+    } catch { /* skip */ }
   }
 
   try {
@@ -79,12 +116,22 @@ function getClaudeUsage(): ClaudeUsage {
             }
           }
         }
-      } catch { /* skip project */ }
+      } catch { /* skip */ }
     }
-  } catch { /* projects dir unreadable */ }
+  } catch { /* skip */ }
 
-  const totalTokens = sonnetTokens + opusTokens + haikuTokens
-  return { sessions, messages, sonnetTokens, opusTokens, haikuTokens, totalTokens, renewalDate }
+  return { sessions, messages, sonnetTokens, opusTokens, haikuTokens, totalTokens: sonnetTokens + opusTokens + haikuTokens, renewalDate }
+}
+
+async function getClaudeUsage(): Promise<ClaudeUsage> {
+  const [local, oauth] = await Promise.all([getLocalUsage(), fetchOAuthUsage()])
+  return {
+    ...local,
+    weeklyUtilization: oauth?.seven_day?.utilization ?? null,
+    weeklyResetsAt: oauth?.seven_day?.resets_at ?? null,
+    sonnetUtilization: oauth?.seven_day_sonnet?.utilization ?? null,
+    opusUtilization: oauth?.seven_day_opus?.utilization ?? null,
+  }
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -94,7 +141,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     claude: await checkClaudeCli(),
   }))
 
-  app.get('/settings/claude-usage', async () => getClaudeUsage())
+  app.get('/settings/claude-usage', async () => await getClaudeUsage())
 
   app.get('/settings/profile', async () => {
     const path = configPath('profile.yml')

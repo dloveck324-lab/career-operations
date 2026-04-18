@@ -63,6 +63,10 @@ export interface ClaudeUsage {
   haikuTokens: number
   totalTokens: number
   renewalDate: string
+  weeklyUtilization: number | null
+  weeklyResetsAt: string | null
+  sonnetUtilization: number | null
+  opusUtilization: number | null
 }
 
 export const api = {

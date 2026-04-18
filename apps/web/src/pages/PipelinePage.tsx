@@ -177,11 +177,13 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   const size = cx * 2
   const C = 2 * Math.PI * r
 
-  // fill = messages / 70000 (approx Claude Max weekly message scale)
+  // fill from real claude.ai OAuth API; fallback to local message count
   const [fill, setFill] = useState(0)
   useEffect(() => {
     if (usage === null) return
-    const target = Math.min(1, usage.messages / 70000)
+    const target = usage.weeklyUtilization !== null
+      ? usage.weeklyUtilization / 100
+      : Math.min(1, usage.messages / 70000)
     const t = setTimeout(() => setFill(target), 80)
     return () => clearTimeout(t)
   }, [usage])
@@ -189,16 +191,26 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   // strokeDashoffset controls arc length: C = empty, 0 = full circle
   const dashoffset = C * (1 - fill)
 
-  const renewalLabel = usage
-    ? new Date(usage.renewalDate + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : '—'
+  const resetsAt = usage?.weeklyResetsAt
+    ? new Date(usage.weeklyResetsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null
+  const renewalLabel = resetsAt
+    ?? (usage ? new Date(usage.renewalDate + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
+
+  const weeklyLabel = usage?.weeklyUtilization !== null && usage?.weeklyUtilization !== undefined
+    ? `${usage.weeklyUtilization}%`
+    : usage ? `${usage.messages} msgs` : '—'
+
+  const sonnetLabel = usage?.sonnetUtilization !== null && usage?.sonnetUtilization !== undefined
+    ? `${usage.sonnetUtilization}%`
+    : usage ? fmtTokens(usage.sonnetTokens) + ' tok' : '—'
 
   const tip = (
     <Box sx={{ fontSize: 11, lineHeight: 1.8, py: 0.25 }}>
       <Box>Sessions <strong>{usage?.sessions ?? '—'}</strong></Box>
-      <Box>Weekly <strong>{usage?.messages ?? '—'}</strong></Box>
-      <Box>Sonnet <strong>{usage ? fmtTokens(usage.sonnetTokens) + ' tok' : '—'}</strong></Box>
-      <Box>~Renewal <strong>{renewalLabel}</strong></Box>
+      <Box>Weekly <strong>{weeklyLabel}</strong></Box>
+      <Box>Sonnet <strong>{sonnetLabel}</strong></Box>
+      <Box>Resets <strong>{renewalLabel}</strong></Box>
     </Box>
   )
 
