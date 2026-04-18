@@ -119,10 +119,25 @@ export function saveFieldMappingIfMissing(questionText: string, answer: string, 
 }
 
 export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
-  const p = profile.candidate
+  const p = profile.candidate as ProfileConfig['candidate'] & {
+    gender?: string
+    pronouns?: string
+    race_ethnicity?: string
+    veteran_status?: string
+    disability_status?: string
+    work_authorization?: string
+    requires_sponsorship?: string
+    current_company?: string
+    years_of_experience?: string
+    how_did_you_hear?: string
+  }
   const nameParts = p.full_name.trim().split(/\s+/)
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts.slice(1).join(' ')
+
+  // Normalize common yes/no shapes so the answer matches whatever the form expects.
+  const workAuth = p.work_authorization ?? 'Yes'
+  const needsSponsorship = p.requires_sponsorship ?? 'No'
 
   const mappings: Array<[string, string]> = [
     ['Full Name', p.full_name],
@@ -142,7 +157,9 @@ export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
     ] : []),
     ...(p.location ? [
       ['Location', p.location] as [string, string],
+      ['Current Location', p.location] as [string, string],
       ['City, State', p.location] as [string, string],
+      ['Current City', p.location] as [string, string],
     ] : []),
     ...(p.linkedin ? [
       ['LinkedIn', p.linkedin] as [string, string],
@@ -161,6 +178,65 @@ export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
       ['GitHub URL', p.github] as [string, string],
       ['GitHub Profile', p.github] as [string, string],
     ] : []),
+    // ── Screening / legal ──────────────────────────────────────────────────
+    ['Are you legally authorized to work in the country where this job is based?', workAuth],
+    ['Are you legally authorized to work full-time in the country where this job is based?', workAuth],
+    ['Are you authorized to work in the United States?', workAuth],
+    ['Work Authorization', workAuth],
+    ['Will you now or in the future require employer sponsorship for employment authorization in the country where this job is based?', needsSponsorship],
+    ['Will you now or in the future require sponsorship for employment visa status?', needsSponsorship],
+    ['Do you require visa sponsorship?', needsSponsorship],
+    ['Visa Sponsorship Required', needsSponsorship],
+    // Consent / marketing
+    ['Background Check Consent', 'Yes'],
+    ['I consent to a background check', 'Yes'],
+    ['Do you agree to a background check?', 'Yes'],
+    ['Do you agree to allow us to contact you about job opportunities?', 'Yes'],
+    ['May we contact you about other relevant opportunities?', 'Yes'],
+    ['Would you like to be considered for other roles?', 'Yes'],
+    ['I agree to the terms and conditions', 'Yes'],
+    ['I acknowledge the privacy policy', 'Yes'],
+    // Demographics (only if candidate filled them)
+    ...(p.gender ? [
+      ['Gender', p.gender] as [string, string],
+      ['Gender Identity', p.gender] as [string, string],
+      ['What is your gender?', p.gender] as [string, string],
+    ] : []),
+    ...(p.pronouns ? [
+      ['Pronouns', p.pronouns] as [string, string],
+      ['Preferred Pronouns', p.pronouns] as [string, string],
+      ['What are your pronouns?', p.pronouns] as [string, string],
+    ] : []),
+    ...(p.race_ethnicity ? [
+      ['Race', p.race_ethnicity] as [string, string],
+      ['Ethnicity', p.race_ethnicity] as [string, string],
+      ['Race/Ethnicity', p.race_ethnicity] as [string, string],
+      ['What is your race/ethnicity?', p.race_ethnicity] as [string, string],
+    ] : []),
+    ...(p.veteran_status ? [
+      ['Veteran Status', p.veteran_status] as [string, string],
+      ['Are you a protected veteran?', p.veteran_status] as [string, string],
+    ] : []),
+    ...(p.disability_status ? [
+      ['Disability Status', p.disability_status] as [string, string],
+      ['Do you have a disability?', p.disability_status] as [string, string],
+    ] : []),
+    // Employment context
+    ...(p.current_company ? [
+      ['Current Company', p.current_company] as [string, string],
+      ['Current Employer', p.current_company] as [string, string],
+      ['Where do you currently work?', p.current_company] as [string, string],
+    ] : []),
+    ...(p.years_of_experience ? [
+      ['Years of Experience', p.years_of_experience] as [string, string],
+      ['Total Years of Experience', p.years_of_experience] as [string, string],
+      ['How many years of experience do you have?', p.years_of_experience] as [string, string],
+    ] : []),
+    ...(p.how_did_you_hear ? [
+      ['How did you hear about us?', p.how_did_you_hear] as [string, string],
+      ['How did you hear about this role?', p.how_did_you_hear] as [string, string],
+      ['Referral Source', p.how_did_you_hear] as [string, string],
+    ] : []),
   ]
 
   let seeded = 0
@@ -168,6 +244,12 @@ export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
     if (saveFieldMappingIfMissing(question, answer, 'profile')) seeded++
   }
   return seeded
+}
+
+/** Return all stored mappings as a plain object — useful for injecting into agent prompts. */
+export function getAllFieldMappings(): Array<{ question: string; answer: string }> {
+  const rows = db.prepare('SELECT question_text AS question, answer FROM field_mappings ORDER BY use_count DESC').all()
+  return rows as Array<{ question: string; answer: string }>
 }
 
 // ── Scan Runs ─────────────────────────────────────────────────────────────────

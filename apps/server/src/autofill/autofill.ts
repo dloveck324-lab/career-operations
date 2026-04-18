@@ -3,7 +3,7 @@ import { loadProfile, loadCv, type CandidateProfile } from '@job-pipeline/core'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
-import { updateJobStatus } from '../db/queries.js'
+import { updateJobStatus, getAllFieldMappings } from '../db/queries.js'
 import { runRegistry, type Run } from './runs.js'
 import type { Job } from '../db/schema.js'
 
@@ -84,7 +84,8 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     return
   }
 
-  const prompt = buildAgentPrompt(job, profile, cv, tabId)
+  const mappings = getAllFieldMappings()
+  const prompt = buildAgentPrompt(job, profile, cv, tabId, mappings)
   runRegistry.publish(run.id, 'prompt', { text: prompt, model: MODEL_IDS[run.model] })
 
   await spawnClaudeAgent(run, prompt, tabId, job)
@@ -240,7 +241,13 @@ function toApplyUrl(url: string): string {
   }
 }
 
-function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv: string | null, tabId: string): string {
+function buildAgentPrompt(
+  job: Job,
+  profile: ReturnType<typeof loadProfile>,
+  cv: string | null,
+  tabId: string,
+  mappings: Array<{ question: string; answer: string }>,
+): string {
   if (!profile) return ''
   const p = profile.candidate as CandidateProfile
   const candidateJson = JSON.stringify(p, null, 2)
@@ -249,6 +256,8 @@ function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv:
   for (const [k, v] of Object.entries(p)) {
     if (v && typeof v === 'string') fieldHintsLines.push(`- ${k.replace(/_/g, ' ')}: ${v}`)
   }
+
+  const mappingsLines = mappings.map(m => `- "${m.question}" → "${m.answer}"`).join('\n')
 
   return `You are an autonomous job-application agent. Use the \`pinchtab\` CLI (already installed, authenticated, and pointing at a running *headed* Chrome instance) to open the job's application form and fill it out as completely and accurately as possible.
 
@@ -262,7 +271,14 @@ function buildAgentPrompt(job: Job, profile: ReturnType<typeof loadProfile>, cv:
 - Company: ${job.company}
 - URL (your tab is already here): ${job.url}
 
-## Candidate profile (JSON — every truthy field MUST be used if a matching form field exists)
+## Sources of truth (use them IN THIS ORDER when filling any field)
+
+### 1) Known field mappings (fastest — use first)
+These are canonical question → answer pairs already curated for this candidate. If a form field's label matches (or is a close paraphrase of) any question below, use the mapped answer directly — DO NOT ask Claude for a new answer.
+
+${mappingsLines}
+
+### 2) Candidate profile JSON (structured fallback)
 \`\`\`json
 ${candidateJson}
 \`\`\`
@@ -270,7 +286,7 @@ ${candidateJson}
 Readable field list:
 ${fieldHintsLines.join('\n')}
 
-## CV (for open-ended answers)
+### 3) CV (for open-ended answers — "why this role", "tell us about yourself", "optional note to hiring team", etc.)
 ${cv ? cv.slice(0, 5000) : '(no CV provided)'}
 
 ## PinchTab CLI
@@ -283,21 +299,20 @@ ${cv ? cv.slice(0, 5000) : '(no CV provided)'}
 - \`pinchtab find "<query>"\` — semantic element search
 - \`pinchtab eval "<js>"\` — JS in the page (use for custom React dropdowns when \`select\` doesn't work)
 
-### Bulk fill helper — USE THIS for obvious text fields
+### Bulk fill helper — USE THIS for text fields you matched against mappings or profile
 \`bash ${QUICKFILL_SCRIPT} '[{"ref":"e3","value":"Vinicius"},{"ref":"#email","value":"x@y.com"}]'\`
 Pass every plain text/email/URL/phone field in one call. Far fewer turns than individual \`pinchtab fill\`s.
 
-## Your task
-1. If the current tab isn't already on the application form (empty page, listing page, login wall), navigate or click "Apply".
+## Your task (follow this order exactly)
+1. If the current tab isn't already on the application form, navigate or click "Apply".
 2. \`pinchtab snap -i -c\` to map every interactive element.
-3. **Text fields** (name, email, phone, LinkedIn, GitHub, portfolio, location, current company, years, how-did-you-hear) — batch via quickfill. Every truthy profile field MUST be sent to its matching input.
-4. **<select> dropdowns** — \`pinchtab select <ref> "<visible text>"\`. If that fails, click the ref, re-snap, click the option.
-5. **Radios** (gender, work authorization, sponsorship, veteran/disability) — match the candidate's value. \`pinchtab click <ref of chosen option>\`. Empty candidate field → skip.
-6. **Checkboxes** — only required consent boxes. Don't auto-check demographic self-id unless the candidate profile has a value.
+3. **Pass 1 — mapping-driven quickfill**: for every input/radio/select/checkbox whose label matches a known mapping above, collect {ref, value} pairs and fire them through the quickfill helper in ONE call. This includes work authorization, sponsorship, background check consent, "can we contact you about other roles", and all the name/email/URL/etc fields.
+4. **Pass 2 — profile-driven fill**: any remaining text fields that correspond to truthy profile JSON fields (GitHub, portfolio, current_company, years_of_experience, how_did_you_hear, gender, pronouns, etc.) — fill them too. Batch with quickfill when possible.
+5. **Pass 3 — radios & dropdowns for profile fields**: for radios/selects driven by profile values (gender, work auth, sponsorship, veteran/disability), click the right option. Skip when the profile value is empty.
+6. **Pass 4 — open-ended questions**: write a concise, honest answer for every required open-ended text area the mappings + profile couldn't answer. This INCLUDES optional-looking fields like "Optional Note to Hiring Team", "Anything else you'd like us to know?", "Why are you interested?", cover letter paragraphs. Do NOT skip them as "optional" — a 2-4 sentence grounded note is better than a blank field and meaningfully improves recruiter signal. Ground each answer in the CV and the job posting.
 7. **File uploads** — SKIP. Note them in your summary.
-8. **Open-ended text** — 2-4 honest sentences grounded in the CV and job description.
-9. **Multi-step forms** — click Next/Continue, re-snap, continue. NEVER click Submit / Send application.
-10. When finished (or blocked), stop.
+8. **Multi-step forms** — click Next/Continue, re-snap, repeat passes 1-6. NEVER click Submit / Send application.
+9. When finished (or blocked), stop.
 
 ## Output (CRITICAL — short)
 Respond with at most 3 lines, nothing else:
