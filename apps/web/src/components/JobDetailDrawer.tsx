@@ -21,8 +21,12 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const descriptionHtml = useMemo(() => {
     const raw = job?.content?.cleaned_md ?? job?.content?.raw_text ?? ''
     const text = raw.slice(0, 6000)
-    // If it already looks like HTML, use as-is; otherwise parse as markdown
-    return text.trimStart().startsWith('<') ? text : marked.parse(text) as string
+    if (text.trimStart().startsWith('<')) return text
+    // Normalize line breaks: "\n \n" (with whitespace) → "\n\n", single "\n" between content → "\n\n"
+    const normalized = text
+      .replace(/\n[ \t]*\n/g, '\n\n')
+      .replace(/([^\n])\n([^\n])/g, '$1\n\n$2')
+    return marked.parse(normalized) as string
   }, [job?.content?.cleaned_md, job?.content?.raw_text])
 
   const handleApply = async (showBrowser = false) => {
