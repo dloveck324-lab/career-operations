@@ -3,7 +3,8 @@ import { upsertJob, upsertJobContent, hashText } from '../db/queries.js'
 import { scanGreenhouse } from './adapters/greenhouse.js'
 import { scanAshby } from './adapters/ashby.js'
 import { scanLever } from './adapters/lever.js'
-import { scanIndeedRss } from './adapters/indeed-rss.js'
+import { scanRemotive } from './adapters/remotive.js'
+import { scanRemoteOK } from './adapters/remoteok.js'
 import { represcreenExisting, runLinkCheck } from './link-checker.js'
 
 export interface ScanEvent {
@@ -108,32 +109,13 @@ export async function runScan(
         emit({ type: 'error', runId, message: `Lever ${p.name}: ${err}` })
       )
     ),
+    scanRemotive().then(jobs => jobs.forEach(processJob)).catch(err =>
+      emit({ type: 'error', runId, message: `Remotive: ${err}` })
+    ),
+    scanRemoteOK().then(jobs => jobs.forEach(processJob)).catch(err =>
+      emit({ type: 'error', runId, message: `RemoteOK: ${err}` })
+    ),
   ])
-
-  if (isPaused()) {
-    emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing })
-    return { ...stats, reskipped: 0, linkClosed: 0, paused: true }
-  }
-
-  // RSS sources — queries auto-generated from title_filter.positive keywords
-  const rssEnabled = filters?.job_boards?.find(b => b.type === 'indeed_rss')?.enabled ?? true
-  if (rssEnabled) {
-    const keywords = filters?.title_filter?.positive ?? []
-    const rssQueries = buildRssQueries(keywords)
-    for (const query of rssQueries) {
-      if (isPaused()) {
-        emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing })
-        return { ...stats, reskipped: 0, linkClosed: 0, paused: true }
-      }
-      try {
-        const jobs = await scanIndeedRss(query)
-        jobs.forEach(processJob)
-      } catch (err) {
-        emit({ type: 'error', runId, message: `Indeed RSS "${query}": ${err}` })
-      }
-      await new Promise(r => setTimeout(r, 2000))
-    }
-  }
 
   if (isPaused()) {
     emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing })
@@ -164,15 +146,4 @@ export async function runScan(
   emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing, reskipped, linkClosed })
 
   return { ...stats, reskipped, linkClosed, paused: false }
-}
-
-function buildRssQueries(keywords: string[]): string[] {
-  if (keywords.length === 0) return []
-  const CHUNK = 6
-  const queries: string[] = []
-  for (let i = 0; i < keywords.length; i += CHUNK) {
-    const chunk = keywords.slice(i, i + CHUNK)
-    queries.push(chunk.map(k => `"${k}"`).join(' OR ') + ' remote')
-  }
-  return queries
 }
