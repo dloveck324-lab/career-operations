@@ -17,6 +17,7 @@ export async function scanIndeedRss(query: string): Promise<RawJob[]> {
       }
       throw new Error(`Indeed RSS: HTTP 429 (rate limited after retries)`)
     }
+    if (res.status === 404) return [] // Indeed removed public RSS feed
     if (!res.ok) throw new Error(`Indeed RSS: HTTP ${res.status}`)
     return parseRssItems(await res.text())
   }
