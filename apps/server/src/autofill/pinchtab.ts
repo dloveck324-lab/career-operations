@@ -186,6 +186,23 @@ export class PinchTabClient {
     return res as SnapResult
   }
 
+  /**
+   * Poll the active tab's URL until it's no longer a blank/new-tab page.
+   * Returns the loaded URL on success, or '' on timeout.
+   */
+  async waitForLoad(timeoutMs = 15_000): Promise<string> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      try {
+        const res = await this.instanceGet('/snapshot', { filter: 'interactive' }) as SnapResult
+        const url = res.url ?? ''
+        if (url && url !== 'about:blank' && !url.startsWith('chrome://')) return url
+      } catch { /* page still loading */ }
+      await new Promise(r => setTimeout(r, 800))
+    }
+    return ''
+  }
+
   async fill(selector: string, value: string): Promise<void> {
     await this.instancePost('/action', { kind: 'fill', selector, text: value })
   }

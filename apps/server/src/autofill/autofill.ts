@@ -71,9 +71,17 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     runRegistry.setTabId(run.id, tabId)
     // navigateNewTab opens a new tab but may not navigate it — drive to the URL explicitly.
     await client.navigate(applyUrl)
-    // Give the page time to start loading before the agent starts snapping.
-    await new Promise(r => setTimeout(r, 3000))
-    runRegistry.publish(run.id, 'status', { stage: 'tab_opened', tabId, url: applyUrl })
+    // Wait for the page to leave about:blank. Retry once if the first attempt times out.
+    let loadedUrl = await client.waitForLoad(12_000)
+    if (!loadedUrl) {
+      runRegistry.publish(run.id, 'status', { stage: 'nav_retry', url: applyUrl })
+      await client.navigate(applyUrl)
+      loadedUrl = await client.waitForLoad(10_000)
+    }
+    if (!loadedUrl) {
+      throw new Error(`Page did not load after navigation: ${applyUrl}`)
+    }
+    runRegistry.publish(run.id, 'status', { stage: 'tab_opened', tabId, url: loadedUrl })
   } catch (err) {
     runRegistry.publish(run.id, 'error', { message: `Failed to open tab: ${(err as Error).message}` })
     runRegistry.setStatus(run.id, 'failed')
@@ -273,7 +281,7 @@ function buildAgentPrompt(
 ## Job
 - Title: ${job.title}
 - Company: ${job.company}
-- URL (your tab is already here): ${job.url}
+- Application URL: ${job.url}
 
 ## Sources of truth (use them IN THIS ORDER when filling any field)
 
@@ -318,7 +326,7 @@ Location fields usually LOOK like a text input but are actually a combobox that 
 If \`type\` still doesn't open the dropdown (rare but happens on fancy React inputs), fall back to \`pinchtab eval\` and dispatch an \`input\` event manually, e.g. \`pt eval "(() => { const el = document.querySelector('input[name=location]'); el.focus(); el.value='San Francisco'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"\` then re-snap and click the option.
 
 ## Your task (follow this order exactly)
-1. If the current tab isn't already on the application form, navigate or click "Apply".
+1. Run \`pinchtab text\` to check the current page. If it is blank, an error page, or not the application form, run \`pinchtab navigate ${job.url}\` and wait a few seconds before proceeding.
 2. \`pinchtab snap -i -c\` to map every interactive element.
 3. **Pass 1 — mapping-driven quickfill**: for every input/radio/select/checkbox whose label matches a known mapping above, collect {ref, value} pairs and fire them through the quickfill helper in ONE call. This includes work authorization, sponsorship, background check consent, "can we contact you about other roles", and all the name/email/URL/etc fields.
 4. **Pass 2 — profile-driven fill**: any remaining text fields that correspond to truthy profile JSON fields (GitHub, portfolio, current_company, years_of_experience, how_did_you_hear, gender, pronouns, etc.) — fill them too. Batch with quickfill when possible.
