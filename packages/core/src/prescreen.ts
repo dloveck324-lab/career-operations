@@ -77,7 +77,7 @@ function extractComp(text: string): number | null {
   return num
 }
 
-const REMOTE_SIGNALS = ['remote', 'distributed', 'work from home', 'wfh', 'anywhere']
+const REMOTE_SIGNALS = ['remote', 'distributed', 'work from home', 'wfh', 'anywhere', 'worldwide', 'global']
 
 function isRemoteFriendly(location: string, description: string): boolean {
   const text = `${location} ${description}`.toLowerCase()
@@ -112,6 +112,8 @@ const NON_US_TERMS = [
   'brussels', 'antwerp', 'geneva', 'bern', 'lyon', 'marseille', 'bordeaux', 'toulouse',
   'prague', 'budapest', 'bucharest', 'sofia', 'zagreb', 'bratislava',
   'riga', 'vilnius', 'tallinn', 'reykjavik', 'valletta',
+  // Turkish cities (country "turkey" covered above, but cities may appear alone)
+  'istanbul', 'ankara', 'izmir',
   // Middle East & Africa cities
   'dubai', 'abu dhabi', 'doha', 'riyadh', 'jeddah', 'kuwait city', 'muscat', 'manama', 'amman', 'beirut',
   'cairo', 'casablanca', 'nairobi', 'lagos', 'johannesburg', 'cape town', 'accra', 'addis ababa',
@@ -219,7 +221,9 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
     const remoteLocation = isRemoteLocation(location)
     const remote = remoteLocation || isRemoteFriendly(location, description)
 
-    if (requireUSOrRemote && !remoteLocation && isNonUSLocation(location)) {
+    // Block non-US regardless of "remote" in location string — "Remote - Turkey" means
+    // remote within Turkey, not worldwide remote.
+    if (requireUSOrRemote && isNonUSLocation(location)) {
       return { pass: false, reason: `Skipped: location — non-US "${location}" (requires US or remote)`, archetype: null }
     }
 
