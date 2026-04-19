@@ -151,6 +151,46 @@ Server hot-reloads via `tsx watch`. Web hot-reloads via Vite HMR.
 
 API proxy: Vite proxies `/api/*` → `http://127.0.0.1:3001` — no CORS issues in dev.
 
+## Helping the User Run the Project
+
+When the user reports startup or runtime issues, follow this checklist before touching code:
+
+### System dependencies (check first)
+1. **Node ≥ 20**: `node -v` — if lower, ask user to upgrade
+2. **Claude CLI**: `which claude` — must return a path; if missing, direct to https://claude.ai/download
+3. **PinchTab daemon**: `pinchtab daemon status` — if not running, `pinchtab daemon start`; if not installed, `pinchtab daemon install`
+
+### Config files (check second)
+- `config/profile.yml`, `config/filters.yml`, `config/cv.md` must exist
+- If missing: Settings → Import → "Import from Dave's job search", or manual entry in Settings UI
+- Never create these files with placeholder content — they need real user data
+
+### Port conflicts
+- Server runs on **3001**, web on **5173**
+- If a port is busy: `lsof -i :3001` or `lsof -i :5173` to find the conflicting process
+
+### Health badges
+- The topbar shows **PinchTab** and **Claude CLI** health badges
+- Red badge = that service is unreachable; fix the service before debugging the app
+- Badge status comes from `GET /api/settings/status`
+
+### Common symptoms → root causes
+
+| Symptom | Likely cause |
+|---|---|
+| Jobs not appearing after SCAN | No portals enabled in `config/filters.yml`, or file missing |
+| Evaluate button does nothing | Claude CLI not found (`which claude` returns nothing) |
+| Autofill opens blank tab | PinchTab daemon not running |
+| Server crashes on boot | Port 3001 in use, or Node < 20 |
+| Score shows "N/A" | Evaluation failed — check server logs for Claude CLI error |
+
+### Utility script for DB issues
+```bash
+# Re-apply prescreen rules to all existing jobs (use after changing prescreen config)
+node scripts/represcreen.mjs --dry-run   # preview changes
+node scripts/represcreen.mjs             # apply
+```
+
 ## Knowledge Base
 
 | When you need to... | Read |
