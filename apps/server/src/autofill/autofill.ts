@@ -69,6 +69,10 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   try {
     tabId = await client.navigateNewTab(applyUrl)
     runRegistry.setTabId(run.id, tabId)
+    // navigateNewTab opens a new tab but may not navigate it — drive to the URL explicitly.
+    await client.navigate(applyUrl)
+    // Give the page time to start loading before the agent starts snapping.
+    await new Promise(r => setTimeout(r, 3000))
     runRegistry.publish(run.id, 'status', { stage: 'tab_opened', tabId, url: applyUrl })
   } catch (err) {
     runRegistry.publish(run.id, 'error', { message: `Failed to open tab: ${(err as Error).message}` })
