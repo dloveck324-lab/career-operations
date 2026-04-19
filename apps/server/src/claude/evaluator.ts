@@ -128,21 +128,25 @@ function parseEvalResponse(raw: string, model: string): EvalResult {
   const cultural_signals = clamp15(parsed.cultural_signals)
 
   const dimLine = [
-    cv_match != null ? `CV ${cv_match.toFixed(1)}` : null,
-    north_star != null ? `NS ${north_star.toFixed(1)}` : null,
+    cv_match != null ? `Experience ${cv_match.toFixed(1)}` : null,
+    north_star != null ? `Role Fit ${north_star.toFixed(1)}` : null,
     comp != null ? `Comp ${comp.toFixed(1)}` : null,
     cultural_signals != null ? `Culture ${cultural_signals.toFixed(1)}` : null,
   ].filter(Boolean).join(' · ')
 
-  const flags = [
-    ...(parsed.red_flags ?? []).map(f => `⚠ ${f}`),
-    ...(parsed.green_flags ?? []).map(f => `✓ ${f}`),
-  ]
+  const prosSection = (parsed.green_flags ?? []).length > 0
+    ? `Pros\n${(parsed.green_flags ?? []).map(f => `• ${f}`).join('\n')}`
+    : null
+
+  const consSection = (parsed.red_flags ?? []).length > 0
+    ? `Cons\n${(parsed.red_flags ?? []).map(f => `• ${f}`).join('\n')}`
+    : null
 
   const verdict_md = [
     dimLine,
     parsed.verdict ?? '',
-    flags.join('\n'),
+    prosSection,
+    consSection,
   ].filter(Boolean).join('\n\n').trim()
 
   return {

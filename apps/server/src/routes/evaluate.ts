@@ -81,7 +81,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
           saveEvaluation({ job_id: job.id, ...result })
           updateJobStatus(job.id, 'evaluated', {
             score: result.score,
-            score_reason: result.verdict_md?.slice(0, 500),
+            score_reason: result.verdict_md?.slice(0, 1000),
             archetype: result.archetype ?? job.archetype ?? undefined,
             evaluated_at: new Date().toISOString(),
           })
@@ -107,7 +107,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
     saveEvaluation({ job_id: job.id, ...result })
     updateJobStatus(job.id, 'evaluated', {
       score: result.score,
-      score_reason: result.verdict_md?.slice(0, 500),
+      score_reason: result.verdict_md?.slice(0, 1000),
       evaluated_at: new Date().toISOString(),
     })
     return result
