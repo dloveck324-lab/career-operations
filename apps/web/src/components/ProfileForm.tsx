@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Stack, TextField, MenuItem, Select, FormControl, InputLabel,
   Table, TableBody, TableCell, TableHead, TableRow, IconButton,
-  Button, Box, Typography,
+  Button, Box, Typography, FormControlLabel, Switch,
 } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
 import { api } from '../api.js'
@@ -31,7 +31,11 @@ interface Profile {
   prescreen: {
     seniority_min: string
     comp_floor: number
-    location_policy: { allow_onsite_cities: string[]; require_remote_if_elsewhere: boolean }
+    location_policy: {
+      allow_onsite_cities: string[]
+      require_remote_if_elsewhere: boolean
+      require_us_or_remote: boolean
+    }
     blocklist_titles: string[]
     archetype_keywords: ArchetypeKeywords
   }
@@ -51,7 +55,7 @@ const EMPTY: Profile = {
   prescreen: {
     seniority_min: 'Senior',
     comp_floor: 0,
-    location_policy: { allow_onsite_cities: [], require_remote_if_elsewhere: true },
+    location_policy: { allow_onsite_cities: [], require_remote_if_elsewhere: true, require_us_or_remote: true },
     blocklist_titles: ['intern', 'internship', 'junior', 'entry-level'],
     archetype_keywords: {},
   },
@@ -324,6 +328,43 @@ export function ProfileForm() {
           onChange={v => setPrescreen('location_policy', { ...profile.prescreen.location_policy, allow_onsite_cities: v })}
           placeholder="e.g. San Francisco"
         />
+
+        <Stack spacing={0.5}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={profile.prescreen.location_policy?.require_us_or_remote ?? true}
+                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, require_us_or_remote: e.target.checked })}
+                size="small"
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2">Only US or worldwide remote</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Rejects non-US locations. "Remote – UK" or "Remote – Turkey" are blocked; "Remote", "Worldwide", and US cities pass.
+                </Typography>
+              </Box>
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={profile.prescreen.location_policy?.require_remote_if_elsewhere ?? true}
+                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, require_remote_if_elsewhere: e.target.checked })}
+                size="small"
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2">Require remote outside allowed cities</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  If a role is on-site in a city not listed above, it is skipped.
+                </Typography>
+              </Box>
+            }
+          />
+        </Stack>
 
         <Box>
           <Typography variant="caption" color="text.secondary" display="block" mb={1}>
