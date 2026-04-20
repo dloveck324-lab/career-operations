@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PinchTabClient } from '../autofill/pinchtab.js'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, copyFileSync, unlinkSync } from 'fs'
 import { resolve, join } from 'path'
-import { homedir } from 'os'
+import { homedir, tmpdir } from 'os'
 import yaml from 'js-yaml'
 import { configExists } from '@job-pipeline/core'
 import { scheduler } from '../automation/scheduler.js'
+import { execSync } from 'child_process'
+import { createDecipheriv, pbkdf2Sync } from 'crypto'
 
 const CONFIG_DIR = resolve(process.cwd(), '../../config')
 mkdirSync(CONFIG_DIR, { recursive: true })
@@ -31,40 +33,98 @@ export interface ClaudeUsage {
   opusUtilization: number | null
 }
 
-interface OAuthWindow { utilization: number; resets_at?: string }
-interface OAuthUsageData {
-  five_hour?: OAuthWindow
-  seven_day?: OAuthWindow
-  seven_day_sonnet?: OAuthWindow
-  seven_day_opus?: OAuthWindow
+interface UsageWindow { utilization: number; resets_at?: string | null }
+interface WebUsageData {
+  five_hour?: UsageWindow | null
+  seven_day?: UsageWindow | null
+  seven_day_sonnet?: UsageWindow | null
+  seven_day_opus?: UsageWindow | null
   [key: string]: unknown
 }
 
-let oauthCache: { data: OAuthUsageData; fetchedAt: number } | null = null
+let webUsageCache: { data: WebUsageData; fetchedAt: number } | null = null
 
-async function fetchOAuthUsage(): Promise<OAuthUsageData | null> {
-  if (oauthCache && Date.now() - oauthCache.fetchedAt < 2 * 60 * 1000) return oauthCache.data
+function getChromeCookies(): Record<string, string> {
   try {
-    const credsPath = join(homedir(), '.claude', '.credentials.json')
-    if (!existsSync(credsPath)) return null
-    const creds = JSON.parse(readFileSync(credsPath, 'utf-8'))
-    const token = creds?.claude_ai_oauth?.accessToken
-    if (!token) return null
-    const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'anthropic-beta': 'oauth-2025-04-20',
-        'User-Agent': 'claude-code/2.1.114',
-      },
-    })
-    if (!res.ok) return null
-    const data = await res.json() as OAuthUsageData
-    oauthCache = { data, fetchedAt: Date.now() }
+    // Require macOS + Chrome Profile 1 cookies
+    const cookiesDb = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Profile 1', 'Cookies')
+    if (!existsSync(cookiesDb)) return {}
+
+    const pwd = execSync('security find-generic-password -w -a Chrome -s "Chrome Safe Storage"', { timeout: 5000 })
+      .toString().trim()
+    const aesKey = pbkdf2Sync(Buffer.from(pwd), Buffer.from('saltysalt'), 1003, 16, 'sha1')
+
+    const tmp = join(tmpdir(), `chrome_cookies_${Date.now()}.db`)
+    copyFileSync(cookiesDb, tmp)
+
+    // dynamic import to avoid bundler issues — better-sqlite3 is already a dep
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Database = require('better-sqlite3') as typeof import('better-sqlite3').default
+    const db = new Database(tmp, { readonly: true })
+    const rows = db.prepare(
+      "SELECT name, encrypted_value, value FROM cookies WHERE host_key LIKE '%claude.ai%'"
+    ).all() as Array<{ name: string; encrypted_value: Buffer; value: string }>
+    db.close()
+    unlinkSync(tmp)
+
+    const result: Record<string, string> = {}
+    for (const row of rows) {
+      try {
+        const enc = Buffer.from(row.encrypted_value)
+        let val: string
+        if (enc.slice(0, 3).toString() === 'v10') {
+          const decipher = createDecipheriv('aes-128-cbc', aesKey, Buffer.alloc(16, 32))
+          decipher.setAutoPadding(false)
+          const dec = Buffer.concat([decipher.update(enc.slice(3)), decipher.final()])
+          const text = dec.toString('latin1')
+          // Strip non-printable bytes; extract printable segments
+          val = text.replace(/[\x00-\x1f\x7f-\xff]/g, '\x00').split('\x00').filter(s => s.length > 3).join('')
+        } else {
+          val = row.value || ''
+        }
+        if (row.name === 'sessionKey') {
+          const idx = val.indexOf('sk-ant-')
+          if (idx >= 0) val = val.slice(idx).replace(/[\x00-\x1f]+$/, '')
+        }
+        if (val) result[row.name] = val
+      } catch { /* skip malformed cookie */ }
+    }
+    return result
+  } catch { return {} }
+}
+
+async function fetchWebUsage(): Promise<WebUsageData | null> {
+  if (webUsageCache && Date.now() - webUsageCache.fetchedAt < 2 * 60 * 1000) return webUsageCache.data
+  try {
+    const cookies = getChromeCookies()
+    if (!cookies['sessionKey']) return null
+
+    const cookieHeader = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ')
+    const headers = {
+      Cookie: cookieHeader,
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+      Origin: 'https://claude.ai',
+      Referer: 'https://claude.ai/',
+      'sec-fetch-site': 'same-origin',
+      'sec-fetch-mode': 'cors',
+    }
+
+    const orgsRes = await fetch('https://claude.ai/api/organizations', { headers })
+    if (!orgsRes.ok) return null
+    const orgs = await orgsRes.json() as Array<{ uuid: string }>
+    const orgId = orgs[0]?.uuid
+    if (!orgId) return null
+
+    const usageRes = await fetch(`https://claude.ai/api/organizations/${orgId}/usage`, { headers })
+    if (!usageRes.ok) return null
+    const data = await usageRes.json() as WebUsageData
+    webUsageCache = { data, fetchedAt: Date.now() }
     return data
   } catch { return null }
 }
 
-function getLocalUsage(): Omit<ClaudeUsage, 'weeklyUtilization' | 'weeklyResetsAt' | 'sonnetUtilization' | 'opusUtilization'> {
+function getLocalUsage(): Omit<ClaudeUsage, 'sessionUtilization' | 'weeklyUtilization' | 'weeklyResetsAt' | 'sonnetUtilization' | 'opusUtilization'> {
   const now = new Date()
   const renewalDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
   const empty = { sessions: 0, messages: 0, sonnetTokens: 0, opusTokens: 0, haikuTokens: 0, totalTokens: 0, renewalDate }
@@ -125,14 +185,14 @@ function getLocalUsage(): Omit<ClaudeUsage, 'weeklyUtilization' | 'weeklyResetsA
 }
 
 async function getClaudeUsage(): Promise<ClaudeUsage> {
-  const [local, oauth] = await Promise.all([getLocalUsage(), fetchOAuthUsage()])
+  const [local, web] = await Promise.all([getLocalUsage(), fetchWebUsage()])
   return {
     ...local,
-    sessionUtilization: oauth?.five_hour?.utilization ?? null,
-    weeklyUtilization: oauth?.seven_day?.utilization ?? null,
-    weeklyResetsAt: oauth?.seven_day?.resets_at ?? null,
-    sonnetUtilization: oauth?.seven_day_sonnet?.utilization ?? null,
-    opusUtilization: oauth?.seven_day_opus?.utilization ?? null,
+    sessionUtilization: web?.five_hour?.utilization ?? null,
+    weeklyUtilization: web?.seven_day?.utilization ?? null,
+    weeklyResetsAt: web?.seven_day?.resets_at ?? null,
+    sonnetUtilization: web?.seven_day_sonnet?.utilization ?? null,
+    opusUtilization: web?.seven_day_opus?.utilization ?? null,
   }
 }
 
