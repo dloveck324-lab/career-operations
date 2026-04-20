@@ -6,6 +6,7 @@ import { broadcastScanEvent } from './scan.js'
 
 const sseClients = new Set<FastifyReply>()
 let pauseRequested = false
+let evalAbortController: AbortController | null = null
 
 const MODEL_MAP: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
@@ -41,6 +42,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
 
   app.post('/evaluate/pause', async () => {
     pauseRequested = true
+    evalAbortController?.abort()
     return { ok: true }
   })
 
@@ -64,12 +66,14 @@ export async function evaluateRoutes(app: FastifyInstance) {
 
     const modelOverride = body.model ? MODEL_MAP[body.model] : undefined
     pauseRequested = false
+    evalAbortController = new AbortController()
+    const { signal } = evalAbortController
     broadcastEvalEvent({ type: 'eval_queued', jobIds: jobs.map(j => j.id) })
 
     ;(async () => {
       let done = 0
       for (const job of jobs) {
-        if (pauseRequested) {
+        if (pauseRequested || signal.aborted) {
           pauseRequested = false
           broadcastEvalEvent({ type: 'eval_paused', done })
           return
@@ -77,7 +81,8 @@ export async function evaluateRoutes(app: FastifyInstance) {
         try {
           broadcastEvalEvent({ type: 'eval_start', jobId: job.id, company: job.company, title: job.title, total: jobs.length, done })
           const content = getJobContent(job.id)
-          const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', false, modelOverride)
+          const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', false, modelOverride, signal)
+          if (signal.aborted) { broadcastEvalEvent({ type: 'eval_paused', done }); return }
           saveEvaluation({ job_id: job.id, ...result })
           updateJobStatus(job.id, 'evaluated', {
             score: result.score,
@@ -87,6 +92,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
           })
           broadcastEvalEvent({ type: 'eval_done', jobId: job.id, score: result.score })
         } catch (err) {
+          if (signal.aborted) { broadcastEvalEvent({ type: 'eval_paused', done }); return }
           broadcastEvalEvent({ type: 'eval_error', jobId: job.id, message: String(err) })
         }
         done++

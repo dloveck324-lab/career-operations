@@ -18,14 +18,14 @@ export interface EvalResult {
 
 const MAX_DESC_CHARS = 3000  // ~750 tokens
 
-export async function evaluateJob(job: Job, description: string, deep = false, modelOverride?: string): Promise<EvalResult> {
+export async function evaluateJob(job: Job, description: string, deep = false, modelOverride?: string, signal?: AbortSignal): Promise<EvalResult> {
   const profile = loadProfile()
   const cv = loadCv()
   const model = modelOverride ?? (deep ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001')
 
   const prompt = buildSkillPrompt(profile, cv, job, description)
 
-  const raw = await runClaudeCli(prompt, model)
+  const raw = await runClaudeCli(prompt, model, signal)
   return parseEvalResponse(raw, model)
 }
 
@@ -72,8 +72,10 @@ ${candidateBlock}${cvBlock}
 ${jobBlock}`
 }
 
-async function runClaudeCli(prompt: string, model: string): Promise<string> {
+async function runClaudeCli(prompt: string, model: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new Error('AbortError')); return }
+
     const chunks: Buffer[] = []
     const errChunks: Buffer[] = []
 
@@ -84,10 +86,15 @@ async function runClaudeCli(prompt: string, model: string): Promise<string> {
       '--output-format', 'text',
     ], { env: { ...process.env } })
 
+    const onAbort = () => { child.kill('SIGKILL'); reject(new Error('AbortError')) }
+    signal?.addEventListener('abort', onAbort)
+
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
     child.stderr.on('data', (chunk: Buffer) => errChunks.push(chunk))
 
     child.on('close', code => {
+      signal?.removeEventListener('abort', onAbort)
+      if (signal?.aborted) return
       if (code !== 0) {
         const stderr = Buffer.concat(errChunks).toString()
         reject(new Error(`claude CLI exited ${code}: ${stderr.slice(0, 200)}`))
@@ -96,7 +103,7 @@ async function runClaudeCli(prompt: string, model: string): Promise<string> {
       resolve(Buffer.concat(chunks).toString())
     })
 
-    child.on('error', reject)
+    child.on('error', (err) => { signal?.removeEventListener('abort', onAbort); reject(err) })
   })
 }
 
