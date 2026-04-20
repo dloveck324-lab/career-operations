@@ -431,14 +431,7 @@ function EventRow({ ev }: { ev: StreamEvent }) {
         </Box>
       )
     case 'result':
-      return (
-        <Box sx={{ my: 0.5 }}>
-          <Typography variant="caption" color="text.secondary">Result</Typography>
-          <Box sx={{ bgcolor: 'success.dark', color: 'success.contrastText', p: 1, borderRadius: 1, fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
-            {String(ev.data.text ?? '')}
-          </Box>
-        </Box>
-      )
+      return null   // done event already summarises; suggestions panel shows new answers
     case 'user':
       return (
         <Box sx={{ my: 0.5, textAlign: 'right' }}>
