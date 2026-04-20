@@ -221,7 +221,10 @@ export class PinchTabClient {
     const env: Record<string, string> = { ...process.env as Record<string, string> }
     if (tabId) env['PINCHTAB_TAB'] = tabId
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('pinchtab', ['eval', `window.location.href=${JSON.stringify(url)}`], {
+      // Wrap in setTimeout so the CDP Runtime.evaluate call completes and
+      // returns before the navigation destroys the current execution context.
+      // Without this, pinchtab eval hangs waiting for a callback that never arrives.
+      const child = spawn('pinchtab', ['eval', `setTimeout(()=>{window.location.href=${JSON.stringify(url)}},0)`], {
         env, stdio: ['ignore', 'pipe', 'pipe'],
       })
       let stderr = ''
@@ -245,6 +248,23 @@ export class PinchTabClient {
         const res = await this.instanceGet('/snapshot', { filter: 'interactive' }) as SnapResult
         const url = res.url ?? ''
         if (url && url !== 'about:blank' && !url.startsWith('chrome://')) return url
+      } catch { /* page still loading */ }
+      await new Promise(r => setTimeout(r, 800))
+    }
+    return ''
+  }
+
+  /**
+   * Wait until the active tab's URL contains `expectedUrlFragment`.
+   * Use this after navigateViaEval to avoid returning the old URL immediately.
+   */
+  async waitForUrl(expectedUrlFragment: string, timeoutMs = 20_000): Promise<string> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      try {
+        const res = await this.instanceGet('/snapshot', { filter: 'interactive' }) as SnapResult
+        const url = res.url ?? ''
+        if (url && url.includes(expectedUrlFragment)) return url
       } catch { /* page still loading */ }
       await new Promise(r => setTimeout(r, 800))
     }

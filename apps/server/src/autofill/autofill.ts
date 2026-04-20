@@ -118,13 +118,14 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     runRegistry.publish(run.id, 'status', { stage: 'navigating', tabId, url: applyUrl })
     await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
 
-    // Wait for the page to load after the JS navigation.
-    let loadedUrl = await client.waitForLoad(15_000)
+    // Wait for the tab URL to contain the target hostname — not just "any non-blank URL"
+    // (the tab may already have been on a non-blank page before we navigated).
+    const targetHost = new URL(applyUrl).hostname
+    let loadedUrl = await client.waitForUrl(targetHost, 20_000)
     if (!loadedUrl) {
-      // One retry — navigateViaEval again in case the first eval fired too early.
       runRegistry.publish(run.id, 'status', { stage: 'nav_retry', url: applyUrl })
       await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
-      loadedUrl = await client.waitForLoad(12_000)
+      loadedUrl = await client.waitForUrl(targetHost, 15_000)
     }
     if (!loadedUrl) {
       throw new Error(`Page did not load after eval navigation: ${applyUrl}`)
