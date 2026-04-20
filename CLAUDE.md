@@ -163,6 +163,7 @@ When the user reports startup or runtime issues, follow this checklist before to
 ### Config files (check second)
 - `config/profile.yml`, `config/filters.yml`, `config/cv.md` must exist
 - If missing: Settings → Import → "Import from Dave's job search", or manual entry in Settings UI
+- The import wizard looks for a sibling folder named `Dave's job search/` relative to this project; if it's elsewhere, user can set `IMPORT_SOURCE=/path/to/folder` in the environment before starting the server
 - Never create these files with placeholder content — they need real user data
 
 ### Port conflicts

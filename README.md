@@ -52,6 +52,7 @@ You have two options:
 **Option A — Auto-import** (if you have a `Dave's job search/` folder next to this project):
 - Go to **Settings → Import** and click **Import from Dave's job search**
 - This populates `config/profile.yml`, `config/filters.yml`, and `config/cv.md` automatically
+- If your source folder is in a different location, set `IMPORT_SOURCE=/path/to/folder` before starting the server
 
 **Option B — Manual setup**:
 - **Settings → Profile**: fill in your name, target roles, location, and compensation range

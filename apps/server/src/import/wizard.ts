@@ -3,7 +3,10 @@ import { resolve } from 'path'
 import yaml from 'js-yaml'
 import { saveFieldMapping } from '../db/queries.js'
 
-const SOURCE = resolve('/Users/viniciusramos/Documents/Apps/Dave\'s job search')
+// process.cwd() = apps/server/ → ../../../ = parent of this project → sibling "Dave's job search"
+const SOURCE = process.env.IMPORT_SOURCE
+  ? resolve(process.env.IMPORT_SOURCE)
+  : resolve(process.cwd(), "../../../Dave's job search")
 const CONFIG_DIR = resolve(process.cwd(), '../../config')
 
 export interface ImportResult {
