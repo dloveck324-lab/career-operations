@@ -421,15 +421,26 @@ function EventRow({ ev }: { ev: StreamEvent }) {
           <Typography variant="caption">✕ {String(ev.data.message ?? '')}</Typography>
         </Box>
       )
-    case 'thinking':
+    case 'thinking': {
+      const thinkingText = String(ev.data.text ?? '').trim()
+      // Hide the final result JSON block — it's surfaced via suggestions panel / done line
+      try {
+        const jsonStr = thinkingText.match(/```json\s*([\s\S]*?)\s*```/i)?.[1]
+          ?? (thinkingText.startsWith('{') ? thinkingText : null)
+        if (jsonStr) {
+          const p = JSON.parse(jsonStr) as Record<string, unknown>
+          if ('filled' in p && 'skipped' in p && 'blocked' in p) return null
+        }
+      } catch { /* not result JSON — render normally */ }
       return (
         <Box sx={{ my: 0.5 }}>
           <Typography variant="caption" color="text.secondary">Claude</Typography>
           <Box sx={{ bgcolor: 'action.hover', p: 1, borderRadius: 1, fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
-            {String(ev.data.text ?? '')}
+            {thinkingText}
           </Box>
         </Box>
       )
+    }
     case 'result':
       return null   // done event already summarises; suggestions panel shows new answers
     case 'user':
