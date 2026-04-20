@@ -85,6 +85,10 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   const client = new PinchTabClient()
   console.log(`[autofill] start run=${run.id} job=${job.id} model=${run.model} url=${job.url}`)
 
+  // Emit model info immediately so the UI can show the chip before any
+  // infra step (PinchTab, Claude) has a chance to fail.
+  runRegistry.publish(run.id, 'status', { stage: 'starting', model: MODEL_IDS[run.model] })
+
   if (!(await client.isReachable())) {
     runRegistry.publish(run.id, 'error', { message: 'PinchTab not reachable — run: pinchtab daemon install' })
     runRegistry.setStatus(run.id, 'failed')
@@ -101,10 +105,23 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   }
 
   // Create a dedicated tab for this run so parallel runs don't collide.
+  // Chrome can briefly hit "context deadline exceeded" when cold-starting or
+  // under load — retry once before surfacing the failure to the user.
   const applyUrl = toApplyUrl(job.url)
   let tabId: string
   try {
-    tabId = await client.navigateNewTab(applyUrl)
+    try {
+      tabId = await client.navigateNewTab(applyUrl)
+    } catch (err) {
+      const msg = (err as Error).message
+      if (/deadline exceeded|timeout|timed out/i.test(msg)) {
+        runRegistry.publish(run.id, 'status', { stage: 'new_tab_retry', reason: msg })
+        await new Promise(r => setTimeout(r, 1500))
+        tabId = await client.navigateNewTab(applyUrl)
+      } else {
+        throw err
+      }
+    }
     runRegistry.setTabId(run.id, tabId)
     // navigateNewTab opens a new tab but may not navigate it — drive to the URL explicitly.
     await client.navigate(applyUrl)

@@ -22,17 +22,18 @@ interface StreamEvent {
 interface Props {
   runId: string
   jobId: number
+  model?: string   // short ('haiku'|'sonnet'|'opus') or full model id; shown as chip
   onStatusChange?: (status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled') => void
 }
 
-function modelLabel(fullId: string): string {
-  if (fullId.includes('haiku')) return 'Haiku 4.5'
-  if (fullId.includes('sonnet')) return 'Sonnet 4.6'
-  if (fullId.includes('opus')) return 'Opus 4.7'
-  return fullId
+function modelLabel(id: string): string {
+  if (id.includes('haiku')) return 'Haiku 4.5'
+  if (id.includes('sonnet')) return 'Sonnet 4.6'
+  if (id.includes('opus')) return 'Opus 4.7'
+  return id
 }
 
-export function AutofillChatPanel({ runId, onStatusChange }: Props) {
+export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: Props) {
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -98,7 +99,11 @@ export function AutofillChatPanel({ runId, onStatusChange }: Props) {
   }, [events.length])
 
   const prompt = useMemo(() => events.find(e => e.kind === 'prompt')?.data.text as string | undefined, [events])
-  const model = useMemo(() => events.find(e => e.kind === 'prompt')?.data.model as string | undefined, [events])
+  const modelFromEvent = useMemo(() => {
+    const ev = events.find(e => typeof e.data.model === 'string')
+    return ev?.data.model as string | undefined
+  }, [events])
+  const model = modelFromEvent ?? modelProp
   const isRunning = status === 'running' || status === 'queued'
   const canSend = isRunning || hasSession  // can chat post-hoc via --resume
 

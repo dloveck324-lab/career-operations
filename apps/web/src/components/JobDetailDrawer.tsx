@@ -22,18 +22,20 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [evalAnchor, setEvalAnchor] = useState<null | HTMLElement>(null)
   const [runId, setRunId] = useState<string | null>(null)
   const [runStatus, setRunStatus] = useState<'queued' | 'running' | 'done' | 'failed' | 'cancelled' | null>(null)
+  const [runModel, setRunModel] = useState<string | null>(null)
 
   // Reset chat panel + message when switching jobs; look up any active run for this job
   useEffect(() => {
-    if (!job) { setRunId(null); setRunStatus(null); setMessage(null); return }
+    if (!job) { setRunId(null); setRunStatus(null); setRunModel(null); setMessage(null); return }
     setMessage(null)
     let cancelled = false
     api.applyRun(job.id).then(res => {
       if (!cancelled) {
         setRunId(res.run?.id ?? null)
         setRunStatus((res.run?.status as typeof runStatus) ?? null)
+        setRunModel(res.run?.model ?? null)
       }
-    }).catch(() => { if (!cancelled) { setRunId(null); setRunStatus(null) } })
+    }).catch(() => { if (!cancelled) { setRunId(null); setRunStatus(null); setRunModel(null) } })
     return () => { cancelled = true }
   }, [job?.id])
 
@@ -61,6 +63,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
       const { runId: newRunId } = await api.apply(job.id, model)
       setRunId(newRunId)
       setRunStatus('queued')
+      setRunModel(model)
     } catch (err) {
       setMessage(`Error: ${err}`)
     } finally {
@@ -145,7 +148,12 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
           {message && <Alert severity="info" sx={{ fontSize: '0.8rem' }}>{message}</Alert>}
 
           {runId && job && (
-            <AutofillChatPanel runId={runId} jobId={job.id} onStatusChange={setRunStatus} />
+            <AutofillChatPanel
+              runId={runId}
+              jobId={job.id}
+              model={runModel ?? undefined}
+              onStatusChange={setRunStatus}
+            />
           )}
 
           {isInbox ? (
