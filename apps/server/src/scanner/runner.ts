@@ -125,19 +125,21 @@ export async function runScan(
   let reskipped = 0
   let linkClosed = 0
 
+  const baseStats = { found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing }
+
   try {
-    ;({ reskipped } = await represcreenExisting(runId, emit))
+    ;({ reskipped } = await represcreenExisting(runId, emit, baseStats))
   } catch (err) {
     emit({ type: 'error', runId, message: `Re-prescreen failed: ${err}` })
   }
 
   if (isPaused()) {
-    emit({ type: 'progress', runId, found: stats.found, added: stats.added, skipped: stats.skipped, existing: stats.existing, reskipped })
+    emit({ type: 'progress', runId, ...baseStats, reskipped })
     return { ...stats, reskipped, linkClosed: 0, paused: true }
   }
 
   try {
-    ;({ closed: linkClosed } = await runLinkCheck(runId, emit))
+    ;({ closed: linkClosed } = await runLinkCheck(runId, emit, { ...baseStats, reskipped }))
   } catch (err) {
     emit({ type: 'error', runId, message: `Link check failed: ${err}` })
   }

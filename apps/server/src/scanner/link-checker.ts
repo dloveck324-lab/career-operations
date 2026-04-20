@@ -2,11 +2,14 @@ import { loadProfile, loadFilters, buildPrescreen } from '@job-pipeline/core'
 import { getJobsForReprescreen, getJobsForLinkCheck, updateJobStatus } from '../db/queries.js'
 import type { ScanEvent } from './runner.js'
 
+interface BaseStats { found: number; added: number; skipped: number; existing: number }
+
 // ── Re-prescreen existing inbox jobs with current filter rules ────────────────
 
 export async function represcreenExisting(
   runId: number,
-  emit: (e: ScanEvent) => void
+  emit: (e: ScanEvent) => void,
+  baseStats: BaseStats = { found: 0, added: 0, skipped: 0, existing: 0 }
 ): Promise<{ reskipped: number }> {
   const profile = loadProfile()
   const filters = loadFilters()
@@ -26,7 +29,7 @@ export async function represcreenExisting(
     if (!result.pass) {
       updateJobStatus(job.id, 'skipped', { skip_reason: result.reason ?? 'Skipped: prescreen' })
       reskipped++
-      emit({ type: 'progress', runId, reskipped })
+      emit({ type: 'progress', runId, reskipped, ...baseStats })
     }
   }
 
@@ -37,6 +40,7 @@ export async function represcreenExisting(
 
 const CONCURRENCY = 15
 const TIMEOUT_MS = 10_000
+const LINK_CHECK_MAX_MS = 5 * 60_000 // 5-minute hard cap
 
 async function checkUrl(url: string): Promise<'active' | 'closed' | 'unknown'> {
   try {
@@ -64,14 +68,17 @@ async function pool<T>(items: T[], concurrency: number, fn: (item: T) => Promise
   )
 }
 
-export async function runLinkCheck(
+interface LinkCheckStats extends BaseStats { reskipped: number }
+
+async function _runLinkCheck(
   runId: number,
-  emit: (e: ScanEvent) => void
+  emit: (e: ScanEvent) => void,
+  baseStats: LinkCheckStats
 ): Promise<{ checked: number; closed: number }> {
   const jobs = getJobsForLinkCheck()
   if (jobs.length === 0) return { checked: 0, closed: 0 }
 
-  emit({ type: 'progress', runId, message: `Link check: verifying ${jobs.length} job postings...` })
+  emit({ type: 'progress', runId, message: `Link check: verifying ${jobs.length} postings…`, ...baseStats })
 
   let checked = 0
   let closed = 0
@@ -84,9 +91,28 @@ export async function runLinkCheck(
       updateJobStatus(job.id, 'skipped', { skip_reason: 'Closed: link expired — job posting no longer available' })
     }
     if (checked % 25 === 0 || checked === jobs.length) {
-      emit({ type: 'progress', runId, message: `Link check: ${checked}/${jobs.length} checked, ${closed} expired` })
+      emit({
+        type: 'progress', runId,
+        message: `Link check: ${checked}/${jobs.length} · ${closed} expired`,
+        linkClosed: closed,
+        ...baseStats,
+      })
     }
   })
 
   return { checked, closed }
+}
+
+export async function runLinkCheck(
+  runId: number,
+  emit: (e: ScanEvent) => void,
+  baseStats: LinkCheckStats = { found: 0, added: 0, skipped: 0, existing: 0, reskipped: 0 }
+): Promise<{ checked: number; closed: number }> {
+  const hardTimeout = new Promise<{ checked: number; closed: number }>((resolve) => {
+    setTimeout(() => {
+      emit({ type: 'error', runId, message: 'Link check timed out after 5 minutes — skipped remaining URLs' })
+      resolve({ checked: 0, closed: 0 })
+    }, LINK_CHECK_MAX_MS)
+  })
+  return Promise.race([_runLinkCheck(runId, emit, baseStats), hardTimeout])
 }
