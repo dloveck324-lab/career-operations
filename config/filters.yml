@@ -592,3 +592,16 @@ title_filter:
     - Spain
     - Italy
     - France
+    - intern
+    - internship
+    - junior
+    - entry-level
+    - entry level
+    - coordinator
+    - associate product manager
+    - APM
+location_blocklist:
+  - Morroco
+  - Italy
+  - France
+  - India

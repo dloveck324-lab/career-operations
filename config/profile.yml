@@ -85,15 +85,7 @@ prescreen:
     require_remote_if_elsewhere: true
     require_us_or_remote: true
     worldwide_remote_ok: true
-  blocklist_titles:
-    - intern
-    - internship
-    - junior
-    - entry-level
-    - entry level
-    - coordinator
-    - associate product manager
-    - APM
+  blocklist_titles: []
   archetype_keywords:
     healthcare:
       - healthcare
