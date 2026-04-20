@@ -13,6 +13,8 @@ const MODEL_MAP: Record<string, string> = {
   sonnet: 'claude-sonnet-4-6',
 }
 
+const MAX_BULK_JOBS = 100
+
 function broadcastEvalEvent(event: object) {
   const data = `data: ${JSON.stringify(event)}\n\n`
   for (const client of sseClients) {
@@ -62,6 +64,7 @@ export async function evaluateRoutes(app: FastifyInstance) {
       if (body.company) jobs = jobs.filter(j => j.company === body.company)
       if (body.limit && body.limit > 0) jobs = jobs.slice(0, body.limit)
     }
+    if (jobs.length > MAX_BULK_JOBS) jobs = jobs.slice(0, MAX_BULK_JOBS)
     if (jobs.length === 0) return { queued: 0 }
 
     const modelOverride = body.model ? MODEL_MAP[body.model] : undefined

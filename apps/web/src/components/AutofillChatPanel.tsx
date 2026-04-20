@@ -35,6 +35,8 @@ function modelLabel(id: string): string {
   return id
 }
 
+const MAX_EVENTS = 200
+
 export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: Props) {
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [input, setInput] = useState('')
@@ -48,6 +50,7 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLDivElement | null>(null)
+  const eventCounter = useRef(0)
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([])
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false)
   const [cmdHighlight, setCmdHighlight] = useState(0)
@@ -58,7 +61,11 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
     const handle = (kind: EventKind) => (msgEvent: MessageEvent) => {
       try {
         const payload = JSON.parse(msgEvent.data) as Record<string, unknown>
-        setEvents(prev => [...prev, { id: prev.length, kind, ts: (payload.ts as number) ?? Date.now(), data: payload }])
+        const entry: StreamEvent = { id: eventCounter.current++, kind, ts: (payload.ts as number) ?? Date.now(), data: payload }
+        setEvents(prev => {
+          const next = [...prev, entry]
+          return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next
+        })
         if (kind === 'status' && typeof payload.status === 'string') {
           const s = payload.status as typeof status
           setStatus(s)
@@ -144,7 +151,10 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
       await api.applySendMessage(runId, text)
       setInput('')
     } catch (err) {
-      setEvents(prev => [...prev, { id: prev.length, kind: 'error', ts: Date.now(), data: { message: `send failed: ${err}` } }])
+      setEvents(prev => {
+        const next = [...prev, { id: eventCounter.current++, kind: 'error' as EventKind, ts: Date.now(), data: { message: `send failed: ${err}` } }]
+        return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next
+      })
     } finally {
       setSending(false)
     }
@@ -181,7 +191,10 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
       setSelected(new Set())
       setTimeout(() => setSavedMessage(null), 4000)
     } catch (err) {
-      setEvents(prev => [...prev, { id: prev.length, kind: 'error', ts: Date.now(), data: { message: `save mappings failed: ${err}` } }])
+      setEvents(prev => {
+        const next = [...prev, { id: eventCounter.current++, kind: 'error' as EventKind, ts: Date.now(), data: { message: `save mappings failed: ${err}` } }]
+        return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next
+      })
     } finally {
       setSavingMappings(false)
     }
