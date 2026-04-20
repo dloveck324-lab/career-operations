@@ -149,6 +149,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
 
           {runId && job && (
             <AutofillChatPanel
+              key={runId}
               runId={runId}
               jobId={job.id}
               model={runModel ?? undefined}
