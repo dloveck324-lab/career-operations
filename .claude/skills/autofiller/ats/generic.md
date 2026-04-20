@@ -20,7 +20,7 @@ Follow the main skill's pass order exactly (1: mapping quickfill → 2: profile 
 ### Dropdowns and comboboxes
 - Try `pinchtab select` first for `<select>` elements.
 - For anything else that looks like a dropdown (React combobox, custom widget), use click → type → snap → click-suggestion.
-- Location fields should be treated as comboboxes by default — plain `fill` rarely commits.
+- Location fields should be treated as comboboxes by default — plain `fill` rarely commits. Always type city + state (e.g. `"Scottsdale, AZ"`), snap, **read all suggestion labels**, then click the one matching "AZ" / "Arizona" / "United States". Never click the first suggestion blindly — it is often a different country.
 
 ### Submit button patterns to AVOID clicking
 Any button with text matching these, case-insensitive:

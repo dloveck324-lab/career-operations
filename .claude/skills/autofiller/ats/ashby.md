@@ -48,21 +48,26 @@ After running, do a single `pinchtab snap -i -c` to see what remains unfilled.
 - `data-testid` attributes on most inputs — reliable fallback when refs change.
 
 ### Location field (React combobox — NOT in fast-fill)
-Ashby location is an autocomplete combobox. Use click → type → snap → click-suggestion:
+Ashby location is an autocomplete combobox. Use click → type → snap → **read suggestions → click the right one**:
 ```
 pinchtab click <location_ref>
-pinchtab type <location_ref> "Phoenix"
-pinchtab snap -i -c
-pinchtab click <ref_of_suggestion>
+pinchtab type <location_ref> "Scottsdale, AZ"   # city + state — NEVER just the city
+pinchtab snap -i -c                              # read ALL suggestion labels before clicking
+# Look for the suggestion containing "AZ" / "Arizona" / "United States"
+# NEVER click the first suggestion blindly — it may match a different country
+pinchtab click <ref_of_correct_suggestion>
+pinchtab snap -i -c   # confirm committed value
 ```
 
-If `type` fails to open the dropdown, dispatch an input event:
+If `type` fails to open the dropdown, dispatch an input event (still use city+state):
 ```
-pinchtab eval "(() => { const el = document.querySelector('input[aria-label*=\"Location\"]'); el.focus(); el.value='Phoenix'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"
+pinchtab eval "(() => { const el = document.querySelector('input[aria-label*=\"Location\"]'); el.focus(); el.value='Scottsdale, AZ'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"
 pinchtab snap -i -c
-pinchtab click <ref_of_suggestion>
+# Read suggestion labels, pick the one with AZ/Arizona/United States
+pinchtab click <ref_of_correct_suggestion>
 ```
 
+If still ambiguous, retry with `"Scottsdale, AZ, United States"`.
 Verify with follow-up snap — input should show the committed value.
 
 ### Resume / file upload

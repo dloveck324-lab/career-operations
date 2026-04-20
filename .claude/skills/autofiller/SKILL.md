@@ -45,6 +45,20 @@ A `quickfill.sh` script is available at the path shown in the invocation prompt 
 `bash <quickfill.sh path> '[{"ref":"e3","value":"Vinicius"},{"ref":"#email","value":"x@y.com"}]'`
 Pass every plain text/email/URL/phone field in one call. Far fewer turns than individual `pinchtab fill`s.
 
+## Location autocomplete — CRITICAL rule (applies to every ATS)
+
+Location fields on every ATS are React comboboxes. **Never click the first suggestion blindly.**
+
+**Always follow this sequence:**
+
+1. Type the **full disambiguated string** from the candidate profile: `<city>, <state>` — e.g. `"Scottsdale, AZ"` not just `"Scottsdale"`. This narrows the dropdown to the right region.
+2. `pinchtab snap -i -c` — read the visible suggestion texts.
+3. **Scan every suggestion label** before clicking. Look for the one that contains the correct state (e.g. "Arizona" or "AZ") **and** country (e.g. "United States" or "US"). Cities exist in multiple countries — the first result is often the wrong one (e.g. "Scottsdale, Scotland", "Phoenix, Ireland").
+4. Click ONLY the matching suggestion. If none match perfectly, click the closest (right country, right state). If multiple match, prefer the one that includes "United States".
+5. `pinchtab snap -i -c` again to confirm the committed value looks correct.
+
+If typing city+state still shows ambiguous results, append `, United States` (e.g. `"Scottsdale, AZ, United States"`) and re-snap.
+
 ## ATS-specific guidance
 
 The invocation prompt will inline an `## ATS-specific notes` section with selectors, quirks, and fill order specific to the detected ATS (Greenhouse, Lever, Ashby, Workday, or generic). Follow it when present.

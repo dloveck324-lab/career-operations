@@ -44,14 +44,18 @@ After running, do a single `pinchtab snap -i -c` to see what remains unfilled.
 - Confirm you're on the form: look for a "Resume/CV" file input and a "Full name" text input.
 
 ### Location field (React combobox — NOT in fast-fill)
-Lever's location input does NOT have a stable `name`. Use click → type → snap → click-suggestion:
+Lever's location input does NOT have a stable `name`. Use click → type → snap → **read suggestions → click the right one**:
 ```
 pinchtab click <location_ref>
-pinchtab type <location_ref> "Phoenix"
-pinchtab snap -i -c
-pinchtab click <ref_of_suggestion>
-pinchtab snap -i -c   # confirm value committed
+pinchtab type <location_ref> "Scottsdale, AZ"   # city + state — NEVER just the city
+pinchtab snap -i -c                              # read ALL suggestion labels
+# Pick the suggestion whose text contains "AZ" / "Arizona" / "United States"
+# NEVER click the first one blindly — it may be a different country
+pinchtab click <ref_of_correct_suggestion>
+pinchtab snap -i -c   # confirm committed value
 ```
+
+If still ambiguous after city+state, type `"Scottsdale, AZ, United States"` and re-snap.
 
 ### Resume/CV
 `input[type=file][name="resume"]` — **SKIP, add to `skipped`.**

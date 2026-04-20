@@ -35,7 +35,9 @@ If the profile value is empty, select "Decline to self-identify" / "I don't wish
 Live under an "Additional Information" or "Questions" section. Treat every textarea as Pass 4 (grounded answer, ADD to `suggestions`).
 
 ### Location
-Greenhouse location fields are sometimes plain text, sometimes the autocomplete widget. Try `pinchtab fill` first; if the value doesn't stick, fall back to the click → type → click-suggestion pattern documented in the main skill.
+Greenhouse location fields are sometimes plain text, sometimes an autocomplete combobox.
+- Try `pinchtab fill <ref> "Scottsdale, AZ"` first. If the value doesn't stick (it shows blank or a placeholder after Tab), switch to the combobox pattern.
+- **Combobox pattern**: click → type `"Scottsdale, AZ"` (city + state) → snap → **read ALL suggestion labels** → click the one containing "AZ" / "Arizona" / "United States". Never click the first suggestion blindly.
 
 ### Submit button
 Labeled "Submit Application". **NEVER click.**
