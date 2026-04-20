@@ -54,8 +54,10 @@ export interface ProfileConfig {
     comp_floor?: number
     location_policy?: {
       allow_onsite_cities?: string[]
+      allowed_countries?: string[]
       require_remote_if_elsewhere?: boolean
       require_us_or_remote?: boolean
+      worldwide_remote_ok?: boolean
     }
     blocklist_titles?: string[]
     archetype_keywords?: Record<string, string[]>

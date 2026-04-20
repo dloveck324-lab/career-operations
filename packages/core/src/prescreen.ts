@@ -3,8 +3,10 @@ export interface PrescreenConfig {
   comp_floor?: number
   location_policy?: {
     allow_onsite_cities?: string[]
+    allowed_countries?: string[]
     require_remote_if_elsewhere?: boolean
     require_us_or_remote?: boolean
+    worldwide_remote_ok?: boolean
   }
   blocklist_titles?: string[]
   archetype_keywords?: Record<string, string[]>
@@ -78,6 +80,7 @@ function extractComp(text: string): number | null {
 }
 
 const REMOTE_SIGNALS = ['remote', 'distributed', 'work from home', 'wfh', 'anywhere', 'worldwide', 'global']
+const WORLDWIDE_SIGNALS = ['worldwide', 'global', 'anywhere']
 
 function isRemoteFriendly(location: string, description: string): boolean {
   const text = `${location} ${description}`.toLowerCase()
@@ -87,6 +90,16 @@ function isRemoteFriendly(location: string, description: string): boolean {
 function isRemoteLocation(location: string): boolean {
   const loc = location.toLowerCase()
   return REMOTE_SIGNALS.some(s => loc.includes(s))
+}
+
+function isWorldwideRemote(location: string): boolean {
+  const loc = location.toLowerCase()
+  return WORLDWIDE_SIGNALS.some(s => loc.includes(s))
+}
+
+function matchesCountry(location: string, country: string): boolean {
+  const escaped = country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[\\s,/(])${escaped}(?:$|[\\s,/)])`, 'i').test(location)
 }
 
 const NON_US_TERMS = [
@@ -175,8 +188,10 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
 
   const minRank = seniority_min ? seniorityRank(seniority_min.toLowerCase()) : -1
   const allowedCities = location_policy.allow_onsite_cities ?? []
+  const allowedCountries = location_policy.allowed_countries ?? []
   const requireRemote = location_policy.require_remote_if_elsewhere !== false
   const requireUSOrRemote = location_policy.require_us_or_remote ?? true
+  const worldwideRemoteOk = location_policy.worldwide_remote_ok !== false
   const negativeTitles = title_filter.negative ?? []
   const positiveTitles = title_filter.positive ?? []
 
@@ -221,10 +236,22 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
     const remoteLocation = isRemoteLocation(location)
     const remote = remoteLocation || isRemoteFriendly(location, description)
 
-    // Block non-US regardless of "remote" in location string — "Remote - Turkey" means
-    // remote within Turkey, not worldwide remote.
+    // Block "Anywhere"/"Worldwide"/"Global" if user only wants US or specific countries
+    if (!worldwideRemoteOk && isWorldwideRemote(location) && !isNonUSLocation(location)) {
+      return { pass: false, reason: `Skipped: location — worldwide remote "${location}" not accepted`, archetype: null }
+    }
+
     if (requireUSOrRemote && isNonUSLocation(location)) {
-      return { pass: false, reason: `Skipped: location — non-US "${location}" (requires US or remote)`, archetype: null }
+      // "Remote - Canada" passes if Canada is in allowed_countries AND it's remote
+      const inAllowedCountry = allowedCountries.some(c => matchesCountry(location, c))
+      if (inAllowedCountry) {
+        if (!remote) {
+          return { pass: false, reason: `Skipped: location — on-site "${location}" in allowed country requires remote`, archetype: null }
+        }
+        // Remote job in an allowed country → continue to remaining checks
+      } else {
+        return { pass: false, reason: `Skipped: location — non-US "${location}" (requires US or remote)`, archetype: null }
+      }
     }
 
     if (allowedCities.length > 0 || requireRemote) {

@@ -328,6 +328,12 @@ export function ProfileForm() {
           onChange={v => setPrescreen('location_policy', { ...profile.prescreen.location_policy, allow_onsite_cities: v })}
           placeholder="e.g. San Francisco"
         />
+        <ChipArrayInput
+          label="Allowed countries for remote jobs (beyond US)"
+          values={profile.prescreen.location_policy?.allowed_countries ?? []}
+          onChange={v => setPrescreen('location_policy', { ...profile.prescreen.location_policy, allowed_countries: v })}
+          placeholder="e.g. Canada"
+        />
 
         <Stack spacing={0.5}>
           <FormControlLabel
@@ -340,9 +346,26 @@ export function ProfileForm() {
             }
             label={
               <Box>
-                <Typography variant="body2">Only US or worldwide remote</Typography>
+                <Typography variant="body2">Only US or allowed-country remote</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Rejects non-US locations. "Remote – UK" or "Remote – Turkey" are blocked; "Remote", "Worldwide", and US cities pass.
+                  Rejects non-US locations unless the country is listed above. "Remote – Canada" passes if Canada is in the list.
+                </Typography>
+              </Box>
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={profile.prescreen.location_policy?.worldwide_remote_ok !== false}
+                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, worldwide_remote_ok: e.target.checked })}
+                size="small"
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2">Accept worldwide remote ("Anywhere", "Global")</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  When on, roles listed as "Anywhere" or "Worldwide" pass. Turn off to restrict to US and allowed countries only.
                 </Typography>
               </Box>
             }

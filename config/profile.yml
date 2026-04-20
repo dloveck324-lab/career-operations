@@ -6,7 +6,16 @@ candidate:
   linkedin: linkedin.com/in/dave-lovecchio
   portfolio_url: DavidGLovecchio.com
   github: ''
-
+  gender: Male
+  pronouns: ''
+  race_ethnicity: ''
+  veteran_status: ''
+  disability_status: ''
+  work_authorization: 'Yes'
+  requires_sponsorship: 'No'
+  current_company: eVisit
+  years_of_experience: ''
+  how_did_you_hear: ''
 target_roles:
   primary:
     - Director of Product
@@ -26,15 +35,13 @@ target_roles:
     - name: Senior Product Manager
       level: Senior
       fit: secondary
-
 narrative:
   headline: Strategic product leader with 10+ years driving product vision in SaaS and Fortune 50 healthcare
   exit_story: >-
-    Director of Product at eVisit (healthcare SaaS) since 2020, where I drove 5x platform utilization growth,
-    retained $11.2M in enterprise revenue, and managed a product org that grew from 4 to 17.
-    Previously led product at J&J across Janssen, Medical Devices, and Ethicon.
-    Looking for my next Director/Head of Product role where I can combine AI tooling fluency with
-    deep healthcare and SaaS experience to drive meaningful product outcomes.
+    Director of Product at eVisit (healthcare SaaS) since 2020, where I drove 5x platform utilization growth, retained
+    $11.2M in enterprise revenue, and managed a product org that grew from 4 to 17. Previously led product at J&J across
+    Janssen, Medical Devices, and Ethicon. Looking for my next Director/Head of Product role where I can combine AI
+    tooling fluency with deep healthcare and SaaS experience to drive meaningful product outcomes.
   superpowers:
     - Revenue retention and enterprise account management
     - M&A product integration
@@ -55,19 +62,16 @@ narrative:
     - name: KLAS Award
       url: ''
       hero_metric: Back-to-back KLAS awards, 10% above industry average
-
 compensation:
   target_range: $180K–$230K
   currency: USD
   minimum: $150K
   location_flexibility: Remote preferred; open to hybrid near Scottsdale/Phoenix
-
 location:
   country: USA
   city: Scottsdale, AZ
   timezone: MST
   visa_status: No sponsorship needed
-
 prescreen:
   seniority_min: Senior
   comp_floor: 140000
@@ -77,8 +81,10 @@ prescreen:
       - Phoenix
       - Tempe
       - Chandler
-    require_us_or_remote: true
+    allowed_countries: []
     require_remote_if_elsewhere: true
+    require_us_or_remote: true
+    worldwide_remote_ok: true
   blocklist_titles:
     - intern
     - internship
