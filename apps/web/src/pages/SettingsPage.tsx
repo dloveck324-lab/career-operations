@@ -40,19 +40,19 @@ export function SettingsPage() {
 
       <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 2 }}>
-          <Tab label="Profile" />
-          <Tab label="Portals" />
-          <Tab label="Filters" />
           <Tab label="CV" />
+          <Tab label="Profile" />
+          <Tab label="Filters" />
+          <Tab label="Portals" />
           <Tab label="Field Mappings" />
           <Tab label="Automation" icon={<AlarmOn sx={{ fontSize: 16 }} />} iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
-          {tab === 0 && <ProfileForm />}
-          {tab === 1 && <PortalsForm />}
+          {tab === 0 && <CvForm />}
+          {tab === 1 && <ProfileForm />}
           {tab === 2 && <FiltersForm />}
-          {tab === 3 && <CvForm />}
+          {tab === 3 && <PortalsForm />}
           {tab === 4 && <FieldMappingsTab />}
           {tab === 5 && <AutomationTab />}
         </Box>
@@ -277,10 +277,9 @@ function FieldMappingsTab() {
   const saveEdit = async (id: number) => {
     const newAnswer = editing[id]
     if (newAnswer === undefined) return
-    // Optimistic update via re-save: delete + re-add via the answer edit
-    // For now update locally and notify user to re-apply if needed
     setMappings(m => m.map(x => x.id === id ? { ...x, answer: newAnswer } : x))
     setEditing(e => { const n = { ...e }; delete n[id]; return n })
+    await api.settings.updateMapping(id, newAnswer)
   }
 
   return (

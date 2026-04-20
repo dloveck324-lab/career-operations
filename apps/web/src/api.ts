@@ -111,6 +111,7 @@ export const api = {
     cv: () => req<{ content: string | null }>('/settings/cv'),
     saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
     fieldMappings: () => req<unknown[]>('/settings/field-mappings'),
+    updateMapping: (id: number, answer: string) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'PATCH', body: JSON.stringify({ answer }), headers: { 'Content-Type': 'application/json' } }),
     deleteMapping: (id: number) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'DELETE' }),
     seedMappings: () => req<{ ok: boolean; seeded: number }>('/settings/field-mappings/seed', { method: 'POST' }),
     automation: () => req<AutomationStatus>('/settings/automation'),

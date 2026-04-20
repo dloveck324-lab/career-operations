@@ -230,6 +230,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     return { ok: true, seeded }
   })
 
+  app.patch('/settings/field-mappings/:id', async (req) => {
+    const { id } = req.params as { id: string }
+    const { answer } = req.body as { answer: string }
+    const { db } = await import('../db/schema.js')
+    db.prepare('UPDATE field_mappings SET answer = ? WHERE id = ?').run(answer, Number(id))
+    return { ok: true }
+  })
+
   app.delete('/settings/field-mappings/:id', async (req) => {
     const { id } = req.params as { id: string }
     const { db } = await import('../db/schema.js')
