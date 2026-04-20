@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import {
   Stack, TextField, MenuItem, Select, FormControl, InputLabel,
   Table, TableBody, TableCell, TableHead, TableRow, IconButton,
-  Button, Box, Typography, FormControlLabel, Switch,
+  Button, Box, Typography,
 } from '@mui/material'
+import { Autocomplete } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
 import { api } from '../api.js'
 import { ChipArrayInput } from './ChipArrayInput.js'
@@ -61,7 +62,6 @@ const EMPTY: Profile = {
   },
 }
 
-const SENIORITY_OPTIONS = ['', 'Junior', 'Mid', 'Senior', 'Staff', 'Principal', 'Director', 'Head', 'VP']
 const FIT_OPTIONS = ['primary', 'secondary', 'adjacent']
 
 export function ProfileForm() {
@@ -91,9 +91,6 @@ export function ProfileForm() {
   const setLocation = (field: keyof Profile['location'], value: string) =>
     set('location', { ...profile.location, [field]: value })
 
-  const setPrescreen = (field: keyof Profile['prescreen'], value: unknown) =>
-    set('prescreen', { ...profile.prescreen, [field]: value })
-
   const save = async () => {
     setSaving(true); setError(null)
     try {
@@ -103,41 +100,14 @@ export function ProfileForm() {
     finally { setSaving(false) }
   }
 
-  // ── Archetype keywords helper ─────────────────────────────────────────────
-  const [newArchSlug, setNewArchSlug] = useState('')
-  const addArchetypeSlug = () => {
-    const slug = newArchSlug.trim().toLowerCase().replace(/\s+/g, '_')
-    if (!slug || profile.prescreen.archetype_keywords[slug] !== undefined) return
-    setPrescreen('archetype_keywords', { ...profile.prescreen.archetype_keywords, [slug]: [] })
-    setNewArchSlug('')
-  }
-  const removeArchetypeSlug = (slug: string) => {
-    const kw = { ...profile.prescreen.archetype_keywords }
-    delete kw[slug]
-    setPrescreen('archetype_keywords', kw)
-  }
-  const setArchetypeKeywords = (slug: string, kws: string[]) =>
-    setPrescreen('archetype_keywords', { ...profile.prescreen.archetype_keywords, [slug]: kws })
-
   return (
     <Stack spacing={4} sx={{ maxWidth: 780 }}>
 
       {/* ── Candidate ── */}
       <Stack spacing={2}>
-        <SectionHeader title="Personal Info" description="Same fields as the CV tab — saving either one syncs the other." />
-        <Stack direction="row" spacing={2}>
-          <TextField label="Full name" value={profile.candidate.full_name} onChange={e => setCandidate('full_name', e.target.value)} fullWidth size="small" />
-          <TextField label="Email" value={profile.candidate.email} onChange={e => setCandidate('email', e.target.value)} fullWidth size="small" />
-        </Stack>
-        <Stack direction="row" spacing={2}>
-          <TextField label="Phone" value={profile.candidate.phone} onChange={e => setCandidate('phone', e.target.value)} fullWidth size="small" />
-          <TextField label="Location" value={profile.candidate.location} onChange={e => setCandidate('location', e.target.value)} fullWidth size="small" placeholder="San Francisco, CA" />
-        </Stack>
-        <Stack direction="row" spacing={2}>
-          <TextField label="LinkedIn" value={profile.candidate.linkedin} onChange={e => setCandidate('linkedin', e.target.value)} fullWidth size="small" placeholder="linkedin.com/in/..." />
-          <TextField label="GitHub" value={profile.candidate.github} onChange={e => setCandidate('github', e.target.value)} fullWidth size="small" placeholder="github.com/..." />
-        </Stack>
-        <TextField label="Portfolio / Website" value={profile.candidate.portfolio_url} onChange={e => setCandidate('portfolio_url', e.target.value)} size="small" />
+        <SectionHeader title="Personal Info" description="Contact info used to fill application forms. Name, email, phone, and links come from your CV." />
+        <TextField label="LinkedIn" value={profile.candidate.linkedin} onChange={e => setCandidate('linkedin', e.target.value)} size="small" fullWidth placeholder="linkedin.com/in/..." />
+        <TextField label="Portfolio / Website" value={profile.candidate.portfolio_url} onChange={e => setCandidate('portfolio_url', e.target.value)} size="small" fullWidth />
       </Stack>
 
       {/* ── Application Defaults ── */}
@@ -169,18 +139,50 @@ export function ProfileForm() {
           <TextField label="Years of experience" value={profile.candidate.years_of_experience} onChange={e => setCandidate('years_of_experience', e.target.value)} size="small" fullWidth placeholder="e.g. 8" />
         </Stack>
         <TextField label="How did you hear about us? (default answer)" value={profile.candidate.how_did_you_hear} onChange={e => setCandidate('how_did_you_hear', e.target.value)} size="small" fullWidth placeholder="e.g. LinkedIn" />
+        <TextField label="GitHub" value={profile.candidate.github} onChange={e => setCandidate('github', e.target.value)} size="small" fullWidth placeholder="github.com/..." />
 
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>Demographics (optional, used for self-ID screens)</Typography>
         <Stack direction="row" spacing={2}>
-          <TextField label="Gender" value={profile.candidate.gender} onChange={e => setCandidate('gender', e.target.value)} size="small" fullWidth placeholder="e.g. Male / Female / Non-binary / Decline to self-identify" />
-          <TextField label="Pronouns" value={profile.candidate.pronouns} onChange={e => setCandidate('pronouns', e.target.value)} size="small" fullWidth placeholder="e.g. he/him" />
+          <TextField label="Gender" value={profile.candidate.gender} onChange={e => setCandidate('gender', e.target.value)} size="small" fullWidth placeholder="e.g. Male / Female / Non-binary" />
+          <FreeDropdown
+            label="Pronouns"
+            value={profile.candidate.pronouns}
+            onChange={v => setCandidate('pronouns', v)}
+            options={['he/him', 'she/her', 'they/them', 'he/they', 'she/they', 'Decline to self-identify']}
+          />
         </Stack>
+        <FreeDropdown
+          label="Race / Ethnicity"
+          value={profile.candidate.race_ethnicity}
+          onChange={v => setCandidate('race_ethnicity', v)}
+          options={[
+            'White', 'Hispanic or Latino', 'Black or African American',
+            'Asian', 'Native Hawaiian or Pacific Islander',
+            'American Indian or Alaska Native', 'Two or more races',
+            'Decline to self-identify',
+          ]}
+        />
         <Stack direction="row" spacing={2}>
-          <TextField label="Race / Ethnicity" value={profile.candidate.race_ethnicity} onChange={e => setCandidate('race_ethnicity', e.target.value)} size="small" fullWidth placeholder="e.g. White / Hispanic or Latino / Decline to self-identify" />
-        </Stack>
-        <Stack direction="row" spacing={2}>
-          <TextField label="Veteran status" value={profile.candidate.veteran_status} onChange={e => setCandidate('veteran_status', e.target.value)} size="small" fullWidth placeholder="e.g. I am not a protected veteran" />
-          <TextField label="Disability status" value={profile.candidate.disability_status} onChange={e => setCandidate('disability_status', e.target.value)} size="small" fullWidth placeholder="e.g. No, I do not have a disability" />
+          <FreeDropdown
+            label="Veteran status"
+            value={profile.candidate.veteran_status}
+            onChange={v => setCandidate('veteran_status', v)}
+            options={[
+              'I am not a protected veteran',
+              'I am a protected veteran',
+              'Decline to self-identify',
+            ]}
+          />
+          <FreeDropdown
+            label="Disability status"
+            value={profile.candidate.disability_status}
+            onChange={v => setCandidate('disability_status', v)}
+            options={[
+              'No, I do not have a disability',
+              'Yes, I have a disability',
+              'Decline to self-identify',
+            ]}
+          />
         </Stack>
       </Stack>
 
@@ -298,127 +300,24 @@ export function ProfileForm() {
         </Stack>
       </Stack>
 
-      {/* ── Prescreen ── */}
-      <Stack spacing={2}>
-        <SectionHeader title="Pre-scan Filters" description="Applied locally before any LLM call — zero token cost." />
-        <Stack direction="row" spacing={2} alignItems="flex-start">
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Minimum seniority</InputLabel>
-            <Select label="Minimum seniority" value={profile.prescreen.seniority_min ?? ''} onChange={e => setPrescreen('seniority_min', e.target.value)}>
-              {SENIORITY_OPTIONS.map(o => <MenuItem key={o} value={o}>{o || '(none)'}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <TextField label="Min compensation (0 = off)" type="number" size="small"
-            value={profile.prescreen.comp_floor ?? 0}
-            onChange={e => setPrescreen('comp_floor', Number(e.target.value))}
-            InputProps={{ inputProps: { min: 0, step: 1000 } }}
-            sx={{ width: 220 }}
-          />
-        </Stack>
-        <ChipArrayInput
-          label="Blocklist titles"
-          values={profile.prescreen.blocklist_titles}
-          onChange={v => setPrescreen('blocklist_titles', v)}
-          placeholder="e.g. intern"
-          color="error"
-        />
-        <ChipArrayInput
-          label="Allowed on-site cities (empty = any)"
-          values={profile.prescreen.location_policy?.allow_onsite_cities ?? []}
-          onChange={v => setPrescreen('location_policy', { ...profile.prescreen.location_policy, allow_onsite_cities: v })}
-          placeholder="e.g. San Francisco"
-        />
-        <ChipArrayInput
-          label="Allowed countries for remote jobs (beyond US)"
-          values={profile.prescreen.location_policy?.allowed_countries ?? []}
-          onChange={v => setPrescreen('location_policy', { ...profile.prescreen.location_policy, allowed_countries: v })}
-          placeholder="e.g. Canada"
-        />
-
-        <Stack spacing={0.5}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={profile.prescreen.location_policy?.require_us_or_remote ?? true}
-                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, require_us_or_remote: e.target.checked })}
-                size="small"
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2">Only US or allowed-country remote</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Rejects non-US locations unless the country is listed above. "Remote – Canada" passes if Canada is in the list.
-                </Typography>
-              </Box>
-            }
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={profile.prescreen.location_policy?.worldwide_remote_ok !== false}
-                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, worldwide_remote_ok: e.target.checked })}
-                size="small"
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2">Accept worldwide remote ("Anywhere", "Global")</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  When on, roles listed as "Anywhere" or "Worldwide" pass. Turn off to restrict to US and allowed countries only.
-                </Typography>
-              </Box>
-            }
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={profile.prescreen.location_policy?.require_remote_if_elsewhere ?? true}
-                onChange={e => setPrescreen('location_policy', { ...profile.prescreen.location_policy, require_remote_if_elsewhere: e.target.checked })}
-                size="small"
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2">Require remote outside allowed cities</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  If a role is on-site in a city not listed above, it is skipped.
-                </Typography>
-              </Box>
-            }
-          />
-        </Stack>
-
-        <Box>
-          <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-            Archetype keyword map — pre-tags jobs before LLM eval
-          </Typography>
-          <Stack spacing={2}>
-            {Object.entries(profile.prescreen.archetype_keywords).map(([slug, kws]) => (
-              <Stack key={slug} direction="row" spacing={1} alignItems="flex-start">
-                <Box sx={{ minWidth: 130, pt: 0.5 }}>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>{slug}</Typography>
-                    <IconButton size="small" onClick={() => removeArchetypeSlug(slug)}><Delete sx={{ fontSize: 14 }} /></IconButton>
-                  </Stack>
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <ChipArrayInput label="" values={kws} onChange={v => setArchetypeKeywords(slug, v)} placeholder="Add keyword" />
-                </Box>
-              </Stack>
-            ))}
-            <Stack direction="row" spacing={1}>
-              <TextField size="small" value={newArchSlug} onChange={e => setNewArchSlug(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addArchetypeSlug() } }}
-                placeholder="New archetype slug (e.g. llmops)" sx={{ width: 260 }} />
-              <Button size="small" variant="outlined" startIcon={<Add />} onClick={addArchetypeSlug}>Add archetype</Button>
-            </Stack>
-          </Stack>
-        </Box>
-      </Stack>
-
       <SaveBar onSave={save} saving={saving} saved={saved} error={error} />
     </Stack>
+  )
+}
+
+function FreeDropdown({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]
+}) {
+  return (
+    <Autocomplete
+      freeSolo
+      size="small"
+      fullWidth
+      options={options}
+      value={value}
+      onInputChange={(_, v) => onChange(v)}
+      renderInput={params => <TextField {...params} label={label} />}
+    />
   )
 }
 

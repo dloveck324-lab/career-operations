@@ -14,6 +14,7 @@ export interface PrescreenConfig {
     positive?: string[]
     negative?: string[]
   }
+  location_blocklist?: string[]
 }
 
 export interface Offer {
@@ -184,6 +185,7 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
     blocklist_titles = [],
     archetype_keywords = {},
     title_filter = {},
+    location_blocklist = [],
   } = config
 
   const minRank = seniority_min ? seniorityRank(seniority_min.toLowerCase()) : -1
@@ -230,6 +232,15 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
       const comp = extractComp(description) ?? extractComp(offer.comp_text ?? '')
       if (comp !== null && comp < comp_floor) {
         return { pass: false, reason: `Skipped: compensation — $${comp.toLocaleString()} below floor $${comp_floor.toLocaleString()}`, archetype: null }
+      }
+    }
+
+    if (location_blocklist.length > 0) {
+      const locLower = location.toLowerCase()
+      for (const kw of location_blocklist) {
+        if (kw && locLower.includes(kw.toLowerCase())) {
+          return { pass: false, reason: `Skipped: location — blocklist keyword "${kw}"`, archetype: null }
+        }
       }
     }
 

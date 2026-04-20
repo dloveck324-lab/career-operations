@@ -10,10 +10,12 @@ interface FiltersFile {
   portals?: unknown[]
   job_boards?: unknown[]
   title_filter?: TitleFilter
+  location_blocklist?: string[]
 }
 
 export function FiltersForm() {
   const [titleFilter, setTitleFilter] = useState<TitleFilter>({ positive: [], negative: [] })
+  const [locationBlocklist, setLocationBlocklist] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,6 +25,7 @@ export function FiltersForm() {
       if (!v) return
       const f = v as FiltersFile
       setTitleFilter(f.title_filter ?? { positive: [], negative: [] })
+      setLocationBlocklist(f.location_blocklist ?? [])
     }).catch(() => null)
   }, [])
 
@@ -30,7 +33,7 @@ export function FiltersForm() {
     setSaving(true); setError(null)
     try {
       const current = (await api.settings.filters()) as FiltersFile ?? {}
-      await api.settings.saveFilters({ ...current, title_filter: titleFilter })
+      await api.settings.saveFilters({ ...current, title_filter: titleFilter, location_blocklist: locationBlocklist })
       setSaved(true); setTimeout(() => setSaved(false), 2500)
     } catch (e) { setError(String(e)) }
     finally { setSaving(false) }
@@ -56,6 +59,20 @@ export function FiltersForm() {
           onChange={v => setTitleFilter(t => ({ ...t, negative: v }))}
           placeholder="e.g. Junior"
           color="error"
+        />
+      </Stack>
+
+      <Stack spacing={2}>
+        <SectionHeader
+          title="Location Blocklist"
+          description="If a job's location field contains any of these keywords, it is skipped — regardless of other location rules."
+        />
+        <ChipArrayInput
+          label="Skip if location contains"
+          values={locationBlocklist}
+          onChange={setLocationBlocklist}
+          placeholder="e.g. Brazil, India, LATAM"
+          color="warning"
         />
       </Stack>
 

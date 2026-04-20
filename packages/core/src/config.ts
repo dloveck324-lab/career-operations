@@ -84,6 +84,7 @@ export interface FiltersConfig {
     positive?: string[]
     negative?: string[]
   }
+  location_blocklist?: string[]
   required_keywords?: string[]
 }
 

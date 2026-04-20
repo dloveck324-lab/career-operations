@@ -11,6 +11,7 @@ import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
 import { PortalsForm } from '../components/PortalsForm.js'
 import { FiltersForm } from '../components/FiltersForm.js'
+import { PrescreenFiltersForm } from '../components/PrescreenFiltersForm.js'
 import { CvForm } from '../components/CvForm.js'
 
 export function SettingsPage() {
@@ -42,7 +43,7 @@ export function SettingsPage() {
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 2 }}>
           <Tab label="CV" />
           <Tab label="Profile" />
-          <Tab label="Filters" />
+          <Tab label="Scan" />
           <Tab label="Portals" />
           <Tab label="Field Mappings" />
           <Tab label="Automation" icon={<AlarmOn sx={{ fontSize: 16 }} />} iconPosition="start" />
@@ -51,7 +52,7 @@ export function SettingsPage() {
         <Box sx={{ p: 3 }}>
           {tab === 0 && <CvForm />}
           {tab === 1 && <ProfileForm />}
-          {tab === 2 && <FiltersForm />}
+          {tab === 2 && <ScanTab />}
           {tab === 3 && <PortalsForm />}
           {tab === 4 && <FieldMappingsTab />}
           {tab === 5 && <AutomationTab />}
@@ -72,6 +73,16 @@ function StatusBadge({ ok, label, hint }: { ok?: boolean; label: string; hint: s
       variant="outlined"
       sx={{ fontSize: '0.75rem' }}
     />
+  )
+}
+
+function ScanTab() {
+  return (
+    <Stack spacing={5}>
+      <FiltersForm />
+      <Divider />
+      <PrescreenFiltersForm />
+    </Stack>
   )
 }
 

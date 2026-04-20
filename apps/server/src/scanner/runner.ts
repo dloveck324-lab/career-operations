@@ -41,7 +41,7 @@ export async function runScan(
   const filters = loadFilters()
   const profile = loadProfile()
   const prescreenFn = profile
-    ? buildPrescreen({ ...profile.prescreen, title_filter: filters?.title_filter })
+    ? buildPrescreen({ ...profile.prescreen, title_filter: filters?.title_filter, location_blocklist: filters?.location_blocklist })
     : buildPrescreen()
 
   const stats = { found: 0, added: 0, skipped: 0, existing: 0 }
