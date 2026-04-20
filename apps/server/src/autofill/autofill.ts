@@ -182,14 +182,23 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
     const initial = { type: 'user', message: { role: 'user', content: [{ type: 'text', text: prompt }] } }
     try { child.stdin.write(JSON.stringify(initial) + '\n') } catch { /* handled below */ }
 
-    const timer = setTimeout(() => {
-      runRegistry.publish(run.id, 'error', { message: `Claude agent timed out after ${CLAUDE_TIMEOUT_MS[run.model] / 1000}s` })
+    // Inactivity timeout: resets on every stdout chunk so long-running but
+    // active fills don't get killed. Only fires when Claude goes silent.
+    let timedOut = false
+    let timer = setTimeout(fireTimeout, CLAUDE_TIMEOUT_MS[run.model])
+    function fireTimeout() {
+      timedOut = true
+      runRegistry.publish(run.id, 'error', { message: `Claude agent timed out after ${CLAUDE_TIMEOUT_MS[run.model] / 1000}s of inactivity` })
       try { child.kill('SIGKILL') } catch { /* ignore */ }
-    }, CLAUDE_TIMEOUT_MS[run.model])
+    }
 
     let buf = ''
     let finalText = ''
     child.stdout.on('data', (c: Buffer) => {
+      // Reset inactivity timer on every chunk of output
+      clearTimeout(timer)
+      timer = setTimeout(fireTimeout, CLAUDE_TIMEOUT_MS[run.model])
+
       buf += c.toString()
       let nl
       while ((nl = buf.indexOf('\n')) >= 0) {
@@ -251,43 +260,58 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
 
     child.on('close', (code) => {
       clearTimeout(timer)
-      if (code !== 0 && run.status !== 'cancelled') {
-        runRegistry.publish(run.id, 'error', { message: `Claude exited ${code}` })
+
+      // Cancelled: cancel() already published done — nothing more to do.
+      if (run.status === 'cancelled') { resolveFn(); return }
+
+      // Timeout with partial result: Claude finished its work but the process
+      // didn't exit before the inactivity window. Treat as success.
+      if (timedOut) {
+        finalizeRun(run, job, finalText)
+        resolveFn()
+        return
+      }
+
+      // Real non-zero exit (not a signal kill)
+      if (code !== 0) {
+        runRegistry.publish(run.id, 'error', { message: `Claude exited with code ${code}` })
         runRegistry.setStatus(run.id, 'failed')
         runRegistry.publish(run.id, 'done', {})
         resolveFn()
         return
       }
 
-      // Finalize: parse the last result text and maybe advance the job status
-      const { filled, skipped, blocked, suggestions } = parseAgentResult(finalText)
-      const skippedLabel = skipped.length > 0 ? String(skipped.length) : ''
-      const suggestionItems = suggestions.map((s, i) => ({ id: `s${i}`, ...s }))
-
-      // Publish suggestions BEFORE done so late subscribers replay both.
-      if (suggestionItems.length > 0) {
-        runRegistry.setSuggestions(run.id, suggestionItems)
-        runRegistry.publish(run.id, 'suggestions', { items: suggestionItems })
-      }
-
-      const suggestionHint = suggestionItems.length > 0
-        ? ` ${suggestionItems.length} new answer${suggestionItems.length === 1 ? '' : 's'} to review.`
-        : ''
-      const shortMsg = blocked
-        ? `Blocked: ${blocked}`
-        : `Form filled (${filled} fields${skippedLabel ? `, ${skippedLabel} skipped` : ''}).${suggestionHint} Review in Chrome and submit when ready.`
-
-      if (run.status !== 'cancelled' && !blocked) {
-        updateJobStatus(job.id, 'ready_to_submit')
-        runRegistry.setStatus(run.id, 'done', { summary: shortMsg, filled, skipped: skippedLabel, blocked, suggestionCount: suggestionItems.length })
-      } else if (blocked) {
-        runRegistry.setStatus(run.id, 'failed', { summary: shortMsg, blocked })
-      }
-      runRegistry.publish(run.id, 'done', { summary: shortMsg, suggestionCount: suggestionItems.length })
-      runRegistry.prune()
+      finalizeRun(run, job, finalText)
       resolveFn()
     })
   })
+}
+
+function finalizeRun(run: Run, job: Job, finalText: string): void {
+  const { filled, skipped, blocked, suggestions } = parseAgentResult(finalText)
+  const skippedLabel = skipped.length > 0 ? String(skipped.length) : ''
+  const suggestionItems = suggestions.map((s, i) => ({ id: `s${i}`, ...s }))
+
+  if (suggestionItems.length > 0) {
+    runRegistry.setSuggestions(run.id, suggestionItems)
+    runRegistry.publish(run.id, 'suggestions', { items: suggestionItems })
+  }
+
+  const suggestionHint = suggestionItems.length > 0
+    ? ` ${suggestionItems.length} new answer${suggestionItems.length === 1 ? '' : 's'} to review.`
+    : ''
+  const shortMsg = blocked
+    ? `Blocked: ${blocked}`
+    : `Form filled (${filled} fields${skippedLabel ? `, ${skippedLabel} skipped` : ''}).${suggestionHint} Review in Chrome and submit when ready.`
+
+  if (!blocked) {
+    updateJobStatus(job.id, 'ready_to_submit')
+    runRegistry.setStatus(run.id, 'done', { summary: shortMsg, filled, skipped: skippedLabel, blocked, suggestionCount: suggestionItems.length })
+  } else {
+    runRegistry.setStatus(run.id, 'failed', { summary: shortMsg, blocked })
+  }
+  runRegistry.publish(run.id, 'done', { summary: shortMsg, suggestionCount: suggestionItems.length })
+  runRegistry.prune()
 }
 
 function toApplyUrl(url: string): string {
