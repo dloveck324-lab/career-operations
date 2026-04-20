@@ -116,8 +116,9 @@ export class RunRegistry {
     const run = this.runs.get(runId)
     if (!run) return
     run.child = child
-    run.status = 'running'
-    this.publish(runId, 'status', { status: 'running' })
+    // Status is already 'running' (set by runOrchestration when work began);
+    // no need to re-publish.
+    if (run.status !== 'running') run.status = 'running'
   }
 
   setStatus(runId: string, status: RunStatus, extra: Record<string, unknown> = {}): void {

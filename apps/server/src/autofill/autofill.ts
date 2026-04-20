@@ -85,6 +85,9 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   const client = new PinchTabClient()
   console.log(`[autofill] start run=${run.id} job=${job.id} model=${run.model} url=${job.url}`)
 
+  // Flip to 'running' the moment real work starts. 'queued' should only mean
+  // "waiting in the bulk concurrency queue" — not "pinchtab/nav in progress".
+  runRegistry.setStatus(run.id, 'running')
   // Emit model info immediately so the UI can show the chip before any
   // infra step (PinchTab, Claude) has a chance to fail.
   runRegistry.publish(run.id, 'status', { stage: 'starting', model: MODEL_IDS[run.model] })
