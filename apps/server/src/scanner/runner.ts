@@ -41,7 +41,18 @@ export async function runScan(
   const filters = loadFilters()
   const profile = loadProfile()
   const prescreenFn = profile
-    ? buildPrescreen({ ...profile.prescreen, title_filter: filters?.title_filter, location_blocklist: filters?.location_blocklist })
+    ? buildPrescreen({
+        ...profile.prescreen,
+        title_filter: {
+          positive: filters?.title_filter?.positive,
+          // merge both sources so legacy profile.blocklist_titles still applies
+          negative: [
+            ...profile.prescreen.blocklist_titles ?? [],
+            ...filters?.title_filter?.negative ?? [],
+          ].filter((v, i, a) => a.indexOf(v) === i),
+        },
+        location_blocklist: filters?.location_blocklist,
+      })
     : buildPrescreen()
 
   const stats = { found: 0, added: 0, skipped: 0, existing: 0 }

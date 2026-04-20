@@ -10,8 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
 import { PortalsForm } from '../components/PortalsForm.js'
-import { FiltersForm } from '../components/FiltersForm.js'
-import { PrescreenFiltersForm } from '../components/PrescreenFiltersForm.js'
+import { ScanFiltersForm } from '../components/ScanFiltersForm.js'
 import { CvForm } from '../components/CvForm.js'
 
 export function SettingsPage() {
@@ -77,13 +76,7 @@ function StatusBadge({ ok, label, hint }: { ok?: boolean; label: string; hint: s
 }
 
 function ScanTab() {
-  return (
-    <Stack spacing={5}>
-      <FiltersForm />
-      <Divider />
-      <PrescreenFiltersForm />
-    </Stack>
-  )
+  return <ScanFiltersForm />
 }
 
 function AutomationTab() {

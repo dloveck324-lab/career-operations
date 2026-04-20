@@ -237,9 +237,15 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
 
     if (location_blocklist.length > 0) {
       const locLower = location.toLowerCase()
+      const titleLower = title.toLowerCase()
       for (const kw of location_blocklist) {
-        if (kw && locLower.includes(kw.toLowerCase())) {
+        if (!kw) continue
+        const kwLower = kw.toLowerCase()
+        if (locLower.includes(kwLower)) {
           return { pass: false, reason: `Skipped: location — blocklist keyword "${kw}"`, archetype: null }
+        }
+        if (titleLower.includes(kwLower)) {
+          return { pass: false, reason: `Skipped: title — location blocklist keyword "${kw}"`, archetype: null }
         }
       }
     }
