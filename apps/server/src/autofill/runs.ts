@@ -162,8 +162,10 @@ export class RunRegistry {
     const run = this.runs.get(runId)
     if (!run) return false
 
-    // Live path — write to running child's stdin
-    if (run.child?.stdin?.writable && run.status === 'running') {
+    // Live path — write to the child's stdin whenever it's still alive. The
+    // run may be marked 'done' (autofill finished) but the CLI process is
+    // intentionally kept open so the user can keep chatting in the same session.
+    if (run.child && !run.child.killed && run.child.stdin?.writable) {
       const payload = { type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } }
       try {
         run.child.stdin.write(JSON.stringify(payload) + '\n')

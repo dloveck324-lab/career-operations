@@ -200,9 +200,9 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
       finalized = true
       clearTimeout(timer)
       finalizeRun(run, job, finalText)
-      // Close stdin so the CLI can exit cleanly; the close handler will no-op
-      // because status is already 'done' (or 'failed' on blocked).
-      try { child.stdin.end() } catch { /* ignore */ }
+      // NOTE: we intentionally keep the CLI process alive (stdin stays open)
+      // so the user can keep chatting with the same session via live stdin.
+      // The run is marked 'done' so the UI drops the loading state.
     }
     child.stdout.on('data', (c: Buffer) => {
       // Reset inactivity timer on every chunk of output
