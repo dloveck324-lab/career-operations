@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box, Typography, Paper, Stack, TextField, IconButton, Chip, CircularProgress,
-  Collapse, Button, Checkbox, Alert,
+  Collapse, Button, Checkbox, Alert, Popper, List, ListItemButton, ListItemText,
 } from '@mui/material'
 import { Send, Stop, ExpandMore, ExpandLess } from '@mui/icons-material'
 import { api } from '../api.js'
+
+interface SlashCommand { name: string; description: string; source: string }
 
 type EventKind =
   | 'prompt' | 'session' | 'thinking' | 'tool' | 'user'
@@ -45,6 +47,10 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
   const [savingMappings, setSavingMappings] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLDivElement | null>(null)
+  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([])
+  const [cmdMenuOpen, setCmdMenuOpen] = useState(false)
+  const [cmdHighlight, setCmdHighlight] = useState(0)
 
   useEffect(() => {
     const es = new EventSource(`/api/apply/runs/${runId}/events`)
@@ -97,6 +103,29 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [events.length])
+
+  useEffect(() => {
+    api.settings.slashCommands().then(setSlashCommands).catch(() => {})
+  }, [])
+
+  const slashQuery = input.match(/^\/([a-z-]*)$/i)?.[1] ?? null
+  const filteredCmds = slashQuery !== null
+    ? slashCommands.filter(c => c.name.startsWith(slashQuery.toLowerCase()))
+    : []
+
+  useEffect(() => {
+    if (filteredCmds.length > 0) {
+      setCmdMenuOpen(true)
+      setCmdHighlight(0)
+    } else {
+      setCmdMenuOpen(false)
+    }
+  }, [input])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectCommand = (cmd: SlashCommand) => {
+    setInput(`/${cmd.name} `)
+    setCmdMenuOpen(false)
+  }
 
   const prompt = useMemo(() => events.find(e => e.kind === 'prompt')?.data.text as string | undefined, [events])
   const modelFromEvent = useMemo(() => {
@@ -299,32 +328,79 @@ export function AutofillChatPanel({ runId, model: modelProp, onStatusChange }: P
         </Alert>
       )}
 
-      <Stack direction="row" spacing={1} sx={{ p: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-        <TextField
-          size="small"
-          fullWidth
-          placeholder={
-            isRunning ? 'Ask Claude about this run…' :
-            canSend  ? 'Resume this session — ask a follow-up, request a fix…' :
-            'No session id to resume'
-          }
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              void handleSend()
+      <Box ref={inputRef} sx={{ position: 'relative' }}>
+        <Popper
+          open={cmdMenuOpen && filteredCmds.length > 0}
+          anchorEl={inputRef.current}
+          placement="top-start"
+          style={{ zIndex: 1300, width: inputRef.current?.offsetWidth ?? 300 }}
+        >
+          <Paper variant="outlined" sx={{ maxHeight: 220, overflow: 'auto', bgcolor: 'background.paper' }}>
+            <List dense disablePadding>
+              {filteredCmds.map((cmd, i) => (
+                <ListItemButton
+                  key={cmd.name}
+                  selected={i === cmdHighlight}
+                  onClick={() => selectCommand(cmd)}
+                  sx={{ py: 0.5, px: 1 }}
+                >
+                  <ListItemText
+                    primary={
+                      <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography component="span" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'primary.main', fontWeight: 600 }}>
+                          /{cmd.name}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={cmd.source}
+                          sx={{ fontSize: '0.6rem', height: 16, '& .MuiChip-label': { px: 0.5 } }}
+                        />
+                      </Box>
+                    }
+                    secondary={
+                      <Typography component="span" variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {cmd.description}
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </Paper>
+        </Popper>
+        <Stack direction="row" spacing={1} sx={{ p: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder={
+              isRunning ? 'Ask Claude… type / for commands' :
+              canSend  ? 'Resume session — ask a follow-up, type / for commands' :
+              'No session id to resume'
             }
-          }}
-          disabled={!canSend || sending}
-          multiline
-          maxRows={4}
-          sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
-        />
-        <IconButton onClick={() => void handleSend()} disabled={!input.trim() || !canSend || sending} size="small">
-          {sending ? <CircularProgress size={16} /> : <Send fontSize="small" />}
-        </IconButton>
-      </Stack>
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (cmdMenuOpen && filteredCmds.length > 0) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setCmdHighlight(h => Math.min(h + 1, filteredCmds.length - 1)); return }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setCmdHighlight(h => Math.max(h - 1, 0)); return }
+                if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); selectCommand(filteredCmds[cmdHighlight]); return }
+                if (e.key === 'Escape') { setCmdMenuOpen(false); return }
+              }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void handleSend()
+              }
+            }}
+            disabled={!canSend || sending}
+            multiline
+            maxRows={4}
+            sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
+          />
+          <IconButton onClick={() => void handleSend()} disabled={!input.trim() || !canSend || sending} size="small">
+            {sending ? <CircularProgress size={16} /> : <Send fontSize="small" />}
+          </IconButton>
+        </Stack>
+      </Box>
     </Paper>
   )
 }

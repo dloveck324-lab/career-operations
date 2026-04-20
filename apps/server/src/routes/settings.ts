@@ -196,6 +196,41 @@ async function getClaudeUsage(): Promise<ClaudeUsage> {
   }
 }
 
+export interface SlashCommand {
+  name: string
+  description: string
+  source: 'project' | 'global' | 'builtin'
+}
+
+const BUILTIN_COMMANDS: SlashCommand[] = [
+  { name: 'compact', description: 'Compact conversation context to save tokens', source: 'builtin' },
+  { name: 'clear', description: 'Clear conversation history and start fresh', source: 'builtin' },
+  { name: 'help', description: 'Show available commands and usage', source: 'builtin' },
+  { name: 'resume', description: 'Resume a previous session by session ID', source: 'builtin' },
+]
+
+function readSkillsFromDir(dir: string, source: 'project' | 'global'): SlashCommand[] {
+  if (!existsSync(dir)) return []
+  const commands: SlashCommand[] = []
+  try {
+    for (const entry of readdirSync(dir)) {
+      const skillFile = join(dir, entry, 'SKILL.md')
+      if (!existsSync(skillFile)) continue
+      try {
+        const content = readFileSync(skillFile, 'utf-8')
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+        if (!fmMatch) continue
+        const fm = yaml.load(fmMatch[1]) as Record<string, unknown>
+        if (fm['user-invocable'] !== true) continue
+        const name = String(fm.name ?? entry)
+        const description = String(fm.description ?? '')
+        commands.push({ name, description, source })
+      } catch { /* skip unreadable */ }
+    }
+  } catch { /* skip unreadable dir */ }
+  return commands
+}
+
 export async function settingsRoutes(app: FastifyInstance) {
   app.get('/settings/status', async () => ({
     config: configExists(),
@@ -204,6 +239,16 @@ export async function settingsRoutes(app: FastifyInstance) {
   }))
 
   app.get('/settings/claude-usage', async () => await getClaudeUsage())
+
+  app.get('/settings/slash-commands', async (): Promise<SlashCommand[]> => {
+    const projectSkillsDir = resolve(process.cwd(), '../../.claude/skills')
+    const globalSkillsDir = join(homedir(), '.claude', 'skills')
+    return [
+      ...BUILTIN_COMMANDS,
+      ...readSkillsFromDir(projectSkillsDir, 'project'),
+      ...readSkillsFromDir(globalSkillsDir, 'global'),
+    ]
+  })
 
   app.get('/settings/profile', async () => {
     const path = configPath('profile.yml')

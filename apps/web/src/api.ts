@@ -124,6 +124,7 @@ export const api = {
     automation: () => req<AutomationStatus>('/settings/automation'),
     saveAutomation: (data: AutomationConfig) => req<{ ok: boolean }>('/settings/automation', { method: 'PUT', body: JSON.stringify(data) }),
     claudeUsage: () => req<ClaudeUsage>('/settings/claude-usage'),
+    slashCommands: () => req<Array<{ name: string; description: string; source: string }>>('/settings/slash-commands'),
   },
   portals: {
     discover: () => req<{ portals: DiscoveredPortal[] }>('/portals/discover'),
