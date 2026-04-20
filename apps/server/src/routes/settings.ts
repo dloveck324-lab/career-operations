@@ -9,6 +9,7 @@ import { configExists } from '@job-pipeline/core'
 import { scheduler } from '../automation/scheduler.js'
 import { execSync } from 'child_process'
 import { createDecipheriv, pbkdf2Sync } from 'crypto'
+import Database from 'better-sqlite3'
 
 const CONFIG_DIR = resolve(process.cwd(), '../../config')
 mkdirSync(CONFIG_DIR, { recursive: true })
@@ -57,9 +58,6 @@ function getChromeCookies(): Record<string, string> {
     const tmp = join(tmpdir(), `chrome_cookies_${Date.now()}.db`)
     copyFileSync(cookiesDb, tmp)
 
-    // dynamic import to avoid bundler issues — better-sqlite3 is already a dep
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require('better-sqlite3') as typeof import('better-sqlite3').default
     const db = new Database(tmp, { readonly: true })
     const rows = db.prepare(
       "SELECT name, encrypted_value, value FROM cookies WHERE host_key LIKE '%claude.ai%'"
