@@ -103,7 +103,7 @@ export function PrescreenFiltersForm() {
 
   return (
     <Stack spacing={4} sx={{ maxWidth: 680 }}>
-      <Stack spacing={2}>
+      <Stack spacing={3}>
         <SectionHeader title="Pre-scan Filters" description="Applied locally before any LLM call — zero token cost." />
 
         <Stack direction="row" spacing={2} alignItems="flex-start">
