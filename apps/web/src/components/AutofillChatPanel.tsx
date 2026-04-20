@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Stack, TextField, IconButton, Chip, CircularProgress,
   Collapse, Button, Checkbox, Alert,
 } from '@mui/material'
-import { Send, Cancel, ExpandMore, ExpandLess } from '@mui/icons-material'
+import { Send, Stop, ExpandMore, ExpandLess } from '@mui/icons-material'
 import { api } from '../api.js'
 
 type EventKind =
@@ -22,9 +22,17 @@ interface StreamEvent {
 interface Props {
   runId: string
   jobId: number
+  onStatusChange?: (status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled') => void
 }
 
-export function AutofillChatPanel({ runId }: Props) {
+function modelLabel(fullId: string): string {
+  if (fullId.includes('haiku')) return 'Haiku 4.5'
+  if (fullId.includes('sonnet')) return 'Sonnet 4.6'
+  if (fullId.includes('opus')) return 'Opus 4.7'
+  return fullId
+}
+
+export function AutofillChatPanel({ runId, onStatusChange }: Props) {
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -44,8 +52,18 @@ export function AutofillChatPanel({ runId }: Props) {
       try {
         const payload = JSON.parse(msgEvent.data) as Record<string, unknown>
         setEvents(prev => [...prev, { id: prev.length, kind, ts: (payload.ts as number) ?? Date.now(), data: payload }])
-        if (kind === 'status' && typeof payload.status === 'string') setStatus(payload.status as typeof status)
-        if (kind === 'done') setStatus(prev => (prev === 'running' ? 'done' : prev))
+        if (kind === 'status' && typeof payload.status === 'string') {
+          const s = payload.status as typeof status
+          setStatus(s)
+          onStatusChange?.(s)
+        }
+        if (kind === 'done') {
+          setStatus(prev => {
+            const next = prev === 'running' ? 'done' : prev
+            if (next !== prev) onStatusChange?.(next)
+            return next
+          })
+        }
         if (kind === 'session' && typeof payload.sessionId === 'string') setHasSession(true)
         if (kind === 'suggestions' && Array.isArray(payload.items)) {
           const items = (payload.items as Suggestion[]).filter(
@@ -80,6 +98,7 @@ export function AutofillChatPanel({ runId }: Props) {
   }, [events.length])
 
   const prompt = useMemo(() => events.find(e => e.kind === 'prompt')?.data.text as string | undefined, [events])
+  const model = useMemo(() => events.find(e => e.kind === 'prompt')?.data.model as string | undefined, [events])
   const isRunning = status === 'running' || status === 'queued'
   const canSend = isRunning || hasSession  // can chat post-hoc via --resume
 
@@ -142,6 +161,15 @@ export function AutofillChatPanel({ runId }: Props) {
   return (
     <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', height: 480, bgcolor: 'background.default' }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+        {model && (
+          <Chip
+            size="small"
+            label={modelLabel(model)}
+            variant="outlined"
+            color="primary"
+            sx={{ fontSize: '0.7rem', height: 20 }}
+          />
+        )}
         <Chip
           size="small"
           label={status}
@@ -152,9 +180,16 @@ export function AutofillChatPanel({ runId }: Props) {
           run {runId}
         </Typography>
         {isRunning && (
-          <IconButton size="small" onClick={handleCancel} title="Cancel run">
-            <Cancel fontSize="small" />
-          </IconButton>
+          <Button
+            size="small"
+            variant="contained"
+            color="error"
+            startIcon={<Stop fontSize="small" />}
+            onClick={handleCancel}
+            sx={{ textTransform: 'none', py: 0.25, minHeight: 0 }}
+          >
+            Stop
+          </Button>
         )}
       </Stack>
 
@@ -332,17 +367,8 @@ function EventRow({ ev }: { ev: StreamEvent }) {
           </Box>
         </Box>
       )
-    case 'tool': {
-      const hint = String(ev.data.hint ?? '')
-      return (
-        <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ my: 0.25 }}>
-          <Chip size="small" label={String(ev.data.name ?? 'tool')} sx={{ fontSize: '0.65rem', height: 18 }} />
-          <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '0.72rem', color: 'text.secondary', overflowWrap: 'anywhere' }}>
-            {hint}
-          </Typography>
-        </Stack>
-      )
-    }
+    case 'tool':
+      return null   // hidden from chat UI — show only Claude/user messages
     case 'prompt':
       return null   // rendered separately via the collapsible header
     default:

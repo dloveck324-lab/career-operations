@@ -264,14 +264,11 @@ export class RunRegistry {
     const run = this.runs.get(runId)
     if (!run) return
     if (run.child && !run.child.killed) {
-      try { run.child.kill('SIGTERM') } catch { /* ignore */ }
-      setTimeout(() => {
-        if (run.child && !run.child.killed) {
-          try { run.child.kill('SIGKILL') } catch { /* ignore */ }
-        }
-      }, 2000)
+      // Immediate hard kill — user pressed Stop and expects the agent to halt now.
+      try { run.child.kill('SIGKILL') } catch { /* ignore */ }
     }
     this.setStatus(runId, 'cancelled')
+    this.publish(runId, 'done', { summary: 'cancelled by user' })
   }
 
   /**
