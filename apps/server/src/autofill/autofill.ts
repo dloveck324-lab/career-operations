@@ -110,27 +110,35 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   const applyUrl = toApplyUrl(job.url)
   let tabId: string
   try {
+    console.log(`[autofill] run=${run.id} step=getActiveTabId`)
     const activeTabId = await client.getActiveTabId()
-    console.log(`[autofill] run=${run.id} activeTabId=${activeTabId ?? '(none)'}`)
+    console.log(`[autofill] run=${run.id} step=getActiveTabId result=${activeTabId ?? '(null)'}`)
     tabId = activeTabId ?? 'default'
     runRegistry.setTabId(run.id, tabId)
 
     runRegistry.publish(run.id, 'status', { stage: 'navigating', tabId, url: applyUrl })
+    console.log(`[autofill] run=${run.id} step=navigateViaEval url=${applyUrl}`)
     await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
+    console.log(`[autofill] run=${run.id} step=navigateViaEval done`)
 
-    // Wait for the tab URL to contain the target hostname — not just "any non-blank URL"
-    // (the tab may already have been on a non-blank page before we navigated).
     const targetHost = new URL(applyUrl).hostname
+    console.log(`[autofill] run=${run.id} step=waitForUrl host=${targetHost}`)
+    runRegistry.publish(run.id, 'status', { stage: 'waiting_for_page', url: applyUrl })
     let loadedUrl = await client.waitForUrl(targetHost, 20_000)
+    console.log(`[autofill] run=${run.id} step=waitForUrl result=${loadedUrl || '(timeout)'}`)
+
     if (!loadedUrl) {
       runRegistry.publish(run.id, 'status', { stage: 'nav_retry', url: applyUrl })
+      console.log(`[autofill] run=${run.id} step=nav_retry`)
       await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
       loadedUrl = await client.waitForUrl(targetHost, 15_000)
+      console.log(`[autofill] run=${run.id} step=nav_retry result=${loadedUrl || '(timeout)'}`)
     }
     if (!loadedUrl) {
-      throw new Error(`Page did not load after eval navigation: ${applyUrl}`)
+      throw new Error(`Page did not load after eval navigation to ${applyUrl} — is Chrome open and the PinchTab daemon running?`)
     }
     runRegistry.publish(run.id, 'status', { stage: 'tab_ready', tabId, url: loadedUrl })
+    console.log(`[autofill] run=${run.id} step=tab_ready url=${loadedUrl}`)
   } catch (err) {
     runRegistry.publish(run.id, 'error', { message: `Failed to navigate to application: ${(err as Error).message}` })
     runRegistry.setStatus(run.id, 'failed')

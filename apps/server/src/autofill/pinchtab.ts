@@ -228,12 +228,18 @@ export class PinchTabClient {
         env, stdio: ['ignore', 'pipe', 'pipe'],
       })
       let stderr = ''
+      // Hard timeout — if pinchtab eval doesn't exit in 10s, kill it and move on.
+      const timer = setTimeout(() => {
+        try { child.kill('SIGKILL') } catch { /* ignore */ }
+        reject(new Error(`pinchtab eval timed out after 10s (url=${url})`))
+      }, 10_000)
       child.stderr?.on('data', (c: Buffer) => { stderr += c.toString() })
       child.on('close', (code: number | null) => {
-        if (code !== 0) reject(new Error(`pinchtab eval navigate failed (exit ${code}): ${stderr.trim()}`))
+        clearTimeout(timer)
+        if (code !== 0 && code !== null) reject(new Error(`pinchtab eval navigate failed (exit ${code}): ${stderr.trim()}`))
         else resolve()
       })
-      child.on('error', reject)
+      child.on('error', (err) => { clearTimeout(timer); reject(err) })
     })
   }
 
