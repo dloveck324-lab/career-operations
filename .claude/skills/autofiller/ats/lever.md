@@ -5,27 +5,56 @@
 - `jobs.lever.co/<company>/<uuid>/apply` — application form (the server already rewrites via `toApplyUrl`).
 - If you land on the detail page (no form visible), `pinchtab navigate <url>/apply` and re-snap.
 
+### Step 0 — fast-fill standard fields (run this BEFORE snapping)
+
+Lever's standard fields have stable `name` attributes. Build one quickfill batch from the
+candidate profile and run it immediately — no snap needed for these fields.
+
+CSS selectors and their profile sources:
+
+| CSS selector | Profile field | Notes |
+|---|---|---|
+| `input[name="name"]` | `full_name` | Single full-name field |
+| `input[name="email"]` | `email` | |
+| `input[name="phone"]` | `phone` | |
+| `input[name="org"]` | `current_company` | |
+| `input[name="urls[LinkedIn]"]` | `linkedin_url` | |
+| `input[name="urls[GitHub]"]` | `github_url` | |
+| `input[name="urls[Portfolio]"]` | `portfolio_url` | |
+| `input[name="urls[Other]"]` | `portfolio_url` (fallback) | Only if Portfolio not filled |
+| `input[name="urls[Twitter]"]` | `twitter_url` | Skip if empty |
+
+Example Step 0 quickfill call (substitute real values from profile):
+```
+bash <quickfill_path> '[
+  {"ref":"input[name=\"name\"]","value":"Jane Doe"},
+  {"ref":"input[name=\"email\"]","value":"jane@example.com"},
+  {"ref":"input[name=\"phone\"]","value":"+1 555 123 4567"},
+  {"ref":"input[name=\"org\"]","value":"Acme Corp"},
+  {"ref":"input[name=\"urls[LinkedIn]\"]","value":"https://linkedin.com/in/janedoe"},
+  {"ref":"input[name=\"urls[GitHub]\"]","value":"https://github.com/janedoe"}
+]'
+```
+
+Only include fields where the profile value is non-empty.
+After running, do a single `pinchtab snap -i -c` to see what remains unfilled.
+
 ### Form shape
-- Single page, tidy. Sections: "Submit your application", "Links", "Additional Information".
+- Single page. Sections: "Submit your application", "Links", "Additional Information".
 - Confirm you're on the form: look for a "Resume/CV" file input and a "Full name" text input.
 
-### Standard fields (labels verbatim)
-- "Full name" — single field. Use `profile.full_name` (not split).
-- "Email" / "Phone" — self-explanatory.
-- "Current company" — `profile.current_company`.
-- "Resume/CV" — `input[type=file][name="resume"]`. **SKIP, note in `skipped`.**
-- "LinkedIn URL" — `profile.linkedin_url`.
-- "Other website" / "Portfolio / Github / Blog" — `profile.portfolio_url` or `profile.github_url`.
-
-### Location (autocomplete combobox)
-Lever's location input is a React combobox. `pinchtab fill` does NOT commit. Use:
+### Location field (React combobox — NOT in fast-fill)
+Lever's location input does NOT have a stable `name`. Use click → type → snap → click-suggestion:
 ```
 pinchtab click <location_ref>
-pinchtab type <location_ref> "San Franci"
+pinchtab type <location_ref> "Phoenix"
 pinchtab snap -i -c
-pinchtab click <ref_of_suggestion>   # e.g. "San Francisco, CA, United States"
-pinchtab snap -i -c                  # confirm value stuck
+pinchtab click <ref_of_suggestion>
+pinchtab snap -i -c   # confirm value committed
 ```
+
+### Resume/CV
+`input[type=file][name="resume"]` — **SKIP, add to `skipped`.**
 
 ### Custom / open-ended (Pass 4)
 Common Lever prompts:
@@ -33,10 +62,10 @@ Common Lever prompts:
 - "Why are you interested in working at <Company>?"
 - "Additional information" (free textarea)
 
-All grounded answers from CV + JD — add each to `suggestions`.
+Grounded answers from CV + JD — add each to `suggestions`.
 
 ### EEO section
-Lever shows a "U.S. Equal Employment Opportunity information" section at the bottom with gender/race/veteran/disability dropdowns. Map from profile; fall back to "Decline to self-identify".
+Dropdowns for gender/race/veteran/disability at the bottom. Map from profile; fall back to "Decline to self-identify".
 
 ### Submit button
 Labeled "Submit application". **NEVER click.**
