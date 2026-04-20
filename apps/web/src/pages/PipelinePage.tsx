@@ -26,7 +26,6 @@ interface ScanEvent { type: string; existing?: number; added?: number; reskipped
 const TABS: Array<{ label: string; statuses: JobStatus[] }> = [
   { label: 'Inbox',     statuses: ['scanned', 'prescreened'] },
   { label: 'Evaluated', statuses: ['evaluated'] },
-  { label: 'Ready to Submit', statuses: ['ready_to_submit'] },
   { label: 'Applied',   statuses: ['applied'] },
   { label: 'Interview', statuses: ['interview'] },
   { label: 'Closed',    statuses: ['completed', 'skipped'] },
