@@ -3,9 +3,46 @@ import { loadProfile, loadCv, type CandidateProfile } from '@job-pipeline/core'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { readFileSync, existsSync } from 'fs'
 import { updateJobStatus, getAllFieldMappings } from '../db/queries.js'
 import { runRegistry, type Run } from './runs.js'
 import type { Job } from '../db/schema.js'
+
+type Ats = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'generic'
+
+function detectAts(url: string): Ats {
+  try {
+    const h = new URL(url).hostname.toLowerCase()
+    if (h.endsWith('greenhouse.io')) return 'greenhouse'
+    if (h.endsWith('jobs.lever.co')) return 'lever'
+    if (h.endsWith('jobs.ashbyhq.com')) return 'ashby'
+    if (h.includes('myworkdayjobs.com') || h.includes('workday.com')) return 'workday'
+    return 'generic'
+  } catch { return 'generic' }
+}
+
+function readSkillFile(relPath: string): string {
+  // Resolve relative to project root (server is started from project root per package.json scripts).
+  const abs = resolve(process.cwd(), relPath)
+  try {
+    if (existsSync(abs)) return readFileSync(abs, 'utf8').trim()
+  } catch { /* noop */ }
+  return ''
+}
+
+function resolveCvPdfPath(profile: ReturnType<typeof loadProfile>): string | null {
+  // Priority: profile.candidate.cv_pdf_path → config/cv.pdf → config/resume.pdf
+  const custom = (profile?.candidate as Record<string, unknown> | undefined)?.cv_pdf_path
+  if (typeof custom === 'string' && custom.trim()) {
+    const abs = resolve(process.cwd(), custom)
+    if (existsSync(abs)) return abs
+  }
+  for (const candidate of ['config/cv.pdf', 'config/resume.pdf']) {
+    const abs = resolve(process.cwd(), candidate)
+    if (existsSync(abs)) return abs
+  }
+  return null
+}
 
 export type AutofillModel = 'haiku' | 'sonnet' | 'opus'
 
@@ -97,8 +134,9 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   }
 
   const mappings = getAllFieldMappings()
-  const prompt = buildAgentPrompt(job, profile, cv, tabId, mappings)
-  runRegistry.publish(run.id, 'prompt', { text: prompt, model: MODEL_IDS[run.model] })
+  const ats = detectAts(job.url)
+  const prompt = buildAgentPrompt(job, profile, cv, tabId, mappings, ats)
+  runRegistry.publish(run.id, 'prompt', { text: prompt, model: MODEL_IDS[run.model], ats })
 
   await spawnClaudeAgent(run, prompt, tabId, job)
 }
@@ -289,6 +327,7 @@ function buildAgentPrompt(
   cv: string | null,
   tabId: string,
   mappings: Array<{ question: string; answer: string }>,
+  ats: Ats,
 ): string {
   if (!profile) return ''
   const p = profile.candidate as CandidateProfile
@@ -299,6 +338,11 @@ function buildAgentPrompt(
     .join('\n')
 
   const cvBlock = cv ? cv.slice(0, 5000) : '(no CV provided)'
+
+  const atsNotes = readSkillFile(`.claude/skills/autofiller/ats/${ats}.md`)
+  const uploadsNotes = readSkillFile('.claude/skills/autofiller/uploads.md')
+  const dialogsNotes = readSkillFile('.claude/skills/autofiller/dialogs.md')
+  const cvPdfPath = resolveCvPdfPath(profile)
 
   return `/autofiller
 
@@ -321,7 +365,18 @@ ${candidateJson}
 ${mappingsLines || '(none — fall back to profile JSON and CV for every field)'}
 
 ## CV (for open-ended answers)
-${cvBlock}`
+${cvBlock}
+
+## ATS-specific notes (${ats})
+${atsNotes || '(no ATS-specific notes available)'}
+
+## File upload guidance
+${uploadsNotes || '(file uploads are not configured; add resume fields to skipped)'}
+
+Resume PDF path: ${cvPdfPath ?? 'not-configured'}
+
+## Native dialog handling
+${dialogsNotes || '(no dialog handling guidance)'}`
 }
 
 export interface AgentResult {

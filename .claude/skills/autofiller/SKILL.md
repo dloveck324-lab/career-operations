@@ -45,15 +45,17 @@ A `quickfill.sh` script is available at the path shown in the invocation prompt 
 `bash <quickfill.sh path> '[{"ref":"e3","value":"Vinicius"},{"ref":"#email","value":"x@y.com"}]'`
 Pass every plain text/email/URL/phone field in one call. Far fewer turns than individual `pinchtab fill`s.
 
-### Location autocompletes (Ashby, Greenhouse, Lever are all similar)
-Location fields usually LOOK like a text input but are actually a combobox that only commits the value once you click a suggestion from a dropdown that appears mid-typing. `pinchtab fill` alone won't work. The reliable pattern:
-1. `pinchtab click <ref of the location input>` to focus it.
-2. `pinchtab type <ref> "<first few chars of the city>"` (e.g. "San Franci") — this fires keystroke events the widget listens for. DO NOT use `fill` here.
-3. `pinchtab snap -i -c` — the dropdown options now appear as new refs.
-4. `pinchtab click <ref of the matching option>` (exact text match like "San Francisco, CA, United States").
-5. Re-snap to confirm the value stuck.
+## ATS-specific guidance
 
-If `type` still doesn't open the dropdown (rare but happens on fancy React inputs), fall back to `pinchtab eval` and dispatch an `input` event manually, e.g. `pt eval "(() => { const el = document.querySelector('input[name=location]'); el.focus(); el.value='San Francisco'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"` then re-snap and click the option.
+The invocation prompt will inline an `## ATS-specific notes` section with selectors, quirks, and fill order specific to the detected ATS (Greenhouse, Lever, Ashby, Workday, or generic). Follow it when present.
+
+## File uploads
+
+The invocation prompt will inline a `## File upload guidance` section when a resume PDF path is configured. Follow it for resume/cover-letter file inputs. Otherwise, add the file field to `skipped`.
+
+## Native dialogs
+
+The invocation prompt will inline a `## Native dialog handling` section describing how to detect and dismiss JavaScript dialogs (alert/confirm/prompt/beforeunload) if the page freezes.
 
 ## Your task (follow this order exactly)
 
@@ -63,7 +65,7 @@ If `type` still doesn't open the dropdown (rare but happens on fancy React input
 4. **Pass 2 — profile-driven fill**: any remaining text fields that correspond to truthy profile JSON fields (GitHub, portfolio, current_company, years_of_experience, how_did_you_hear, gender, pronouns, etc.) — fill them too. Batch with quickfill when possible.
 5. **Pass 3 — radios & dropdowns for profile fields**: for radios/selects driven by profile values (gender, work auth, sponsorship, veteran/disability), click the right option. Skip when the profile value is empty.
 6. **Pass 4 — open-ended questions**: write a concise, honest answer for every required open-ended text area the mappings + profile couldn't answer. This INCLUDES optional-looking fields like "Optional Note to Hiring Team", "Anything else you'd like us to know?", "Why are you interested?", cover letter paragraphs. Do NOT skip them as "optional" — a 2–4 sentence grounded note is better than a blank field and meaningfully improves recruiter signal. Ground each answer in the CV and the job posting. These answers ARE suggestions.
-7. **File uploads** — SKIP. Note them in `skipped`.
+7. **File uploads** — if a `## File upload guidance` section appears in the invocation, follow it. Otherwise, add the field to `skipped`.
 8. **Multi-step forms** — click Next/Continue, re-snap, repeat passes 1–6. NEVER click Submit / Send application.
 9. When finished (or blocked), stop.
 
