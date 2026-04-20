@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { homedir } from 'os'
+import { spawn } from 'child_process'
 
 interface PinchTabConfig {
   serverUrl: string
@@ -220,7 +221,6 @@ export class PinchTabClient {
     const env: Record<string, string> = { ...process.env as Record<string, string> }
     if (tabId) env['PINCHTAB_TAB'] = tabId
     await new Promise<void>((resolve, reject) => {
-      const { spawn } = require('child_process') as typeof import('child_process')
       const child = spawn('pinchtab', ['eval', `window.location.href=${JSON.stringify(url)}`], {
         env, stdio: ['ignore', 'pipe', 'pipe'],
       })
