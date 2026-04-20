@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { Box } from '@mui/material'
 import { createSseConnection } from '../api.js'
+import { AssistantPanel } from './AssistantPanel.js'
 
 interface AppShellProps { children: ReactNode }
 interface ScanEvent { type: string; existing?: number; added?: number; reskipped?: number; linkClosed?: number; company?: string; jobId?: number; score?: number; total?: number; done?: number; message?: string }
@@ -31,6 +32,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       {children}
+      <AssistantPanel />
     </Box>
   )
 }

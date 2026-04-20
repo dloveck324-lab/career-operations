@@ -7,6 +7,7 @@ import { evaluateRoutes } from './routes/evaluate.js'
 import { settingsRoutes } from './routes/settings.js'
 import { applyRoutes } from './routes/apply.js'
 import { portalsRoutes } from './routes/portals.js'
+import { assistantRoutes } from './routes/assistant.js'
 import { configExists, loadProfile } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
 import { getTokenUsage, seedFieldMappingsFromProfile } from './db/queries.js'
@@ -33,6 +34,7 @@ await app.register(evaluateRoutes, { prefix: '/api' })
 await app.register(settingsRoutes, { prefix: '/api' })
 await app.register(applyRoutes, { prefix: '/api' })
 await app.register(portalsRoutes, { prefix: '/api' })
+await app.register(assistantRoutes, { prefix: '/api' })
 
 app.get('/api/health', async () => {
   const cfg = configExists()

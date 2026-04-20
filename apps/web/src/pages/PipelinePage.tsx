@@ -9,6 +9,7 @@ import {
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
   LightMode, DarkMode, SettingsBrightness, Settings,
+  SmartToyOutlined,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -18,6 +19,7 @@ import { api, type Job, type JobStatus, type Stats, type ClaudeUsage } from '../
 import { ScoreChip } from '../components/ScoreChip.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
+import { useAssistant } from '../contexts/AssistantContext.js'
 
 // ─── SSE event shape ──────────────────────────────────────────────────────────
 interface ScanEvent { type: string; existing?: number; added?: number; reskipped?: number; linkClosed?: number; company?: string; jobId?: number; jobIds?: number[]; score?: number; total?: number; done?: number; message?: string }
@@ -329,6 +331,7 @@ export function PipelinePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
+  const assistant = useAssistant()
 
   // Header state
   const [firstName, setFirstName] = useState('David')
@@ -752,6 +755,17 @@ export function PipelinePage() {
             </Popover>
 
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+            {/* Assistant */}
+            <Tooltip title="Assistant">
+              <IconButton
+                size="small"
+                onClick={() => assistant.setOpen(!assistant.open)}
+                sx={{ color: assistant.open ? 'primary.main' : 'text.secondary' }}
+              >
+                <SmartToyOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
 
             {/* Theme */}
             <Tooltip title={`Theme: ${themeModeLabels[themeMode]}`}>

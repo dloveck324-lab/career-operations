@@ -131,6 +131,20 @@ export const api = {
   },
 }
 
+export type AssistantModel = 'haiku' | 'sonnet' | 'opus'
+export interface AssistantSessionInfo { sessionId: string; model: AssistantModel }
+
+export const assistantApi = {
+  createSession: (model?: AssistantModel) =>
+    req<AssistantSessionInfo>('/assistant/session', { method: 'POST', body: JSON.stringify({ model }) }),
+  sendMessage: (sessionId: string, text: string) =>
+    req<{ ok: true }>('/assistant/message', { method: 'POST', body: JSON.stringify({ sessionId, text }) }),
+  changeModel: (sessionId: string, model: AssistantModel) =>
+    req<{ ok: true }>(`/assistant/session/${sessionId}/model`, { method: 'POST', body: JSON.stringify({ model }) }),
+  endSession: (sessionId: string) =>
+    req<{ ok: true }>(`/assistant/session/${sessionId}`, { method: 'DELETE' }),
+}
+
 export function createSseConnection(path: string, onEvent: (event: unknown) => void): () => void {
   const es = new EventSource(`${BASE}${path}`)
   es.onmessage = (e) => {
