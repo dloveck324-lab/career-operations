@@ -104,28 +104,16 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     return
   }
 
-  // Create a dedicated tab for this run so parallel runs don't collide.
-  // Chrome can briefly hit "context deadline exceeded" when cold-starting or
-  // under load — retry once before surfacing the failure to the user.
+  // Navigate the active tab to the application URL. Avoid creating a new tab
+  // (newTab: true) because Chrome's CDP Target.createTarget call frequently
+  // times out ("context deadline exceeded") under normal load.
   const applyUrl = toApplyUrl(job.url)
   let tabId: string
   try {
-    try {
-      tabId = await client.navigateNewTab(applyUrl)
-    } catch (err) {
-      const msg = (err as Error).message
-      if (/deadline exceeded|timeout|timed out/i.test(msg)) {
-        runRegistry.publish(run.id, 'status', { stage: 'new_tab_retry', reason: msg })
-        await new Promise(r => setTimeout(r, 1500))
-        tabId = await client.navigateNewTab(applyUrl)
-      } else {
-        throw err
-      }
-    }
+    tabId = await client.navigateCurrentTab(applyUrl)
     runRegistry.setTabId(run.id, tabId)
-    // navigateNewTab opens a new tab but may not navigate it — drive to the URL explicitly.
-    await client.navigate(applyUrl)
-    // Wait for the page to leave about:blank. Retry once if the first attempt times out.
+    // Wait for the page to leave about:blank. Retry the navigate once if the
+    // first attempt times out (redirect chains can take a while).
     let loadedUrl = await client.waitForLoad(12_000)
     if (!loadedUrl) {
       runRegistry.publish(run.id, 'status', { stage: 'nav_retry', url: applyUrl })

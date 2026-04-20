@@ -173,6 +173,16 @@ export class PinchTabClient {
     return res.tabId
   }
 
+  /**
+   * Navigate the current active tab (no new tab creation) and return whatever
+   * tabId the response carries. Falls back to 'default' when PinchTab doesn't
+   * echo a tabId so callers can always treat the return value as non-null.
+   */
+  async navigateCurrentTab(url: string): Promise<string> {
+    const res = await this.instancePost('/navigate', { url }) as { tabId?: string }
+    return res.tabId ?? 'default'
+  }
+
   async closeTab(tabId: string): Promise<void> {
     await fetch(`${this.cfg.serverUrl}/tabs/${tabId}/close`, {
       method: 'POST',
