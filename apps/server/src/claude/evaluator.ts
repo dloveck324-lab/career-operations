@@ -100,7 +100,7 @@ async function runClaudeCli(prompt: string, model: string): Promise<string> {
   })
 }
 
-function parseEvalResponse(raw: string, model: string): EvalResult {
+export function parseEvalResponse(raw: string, model: string): EvalResult {
   const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
 
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
