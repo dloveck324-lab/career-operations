@@ -104,28 +104,34 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     return
   }
 
-  // Navigate the active tab to the application URL. Avoid creating a new tab
-  // (newTab: true) because Chrome's CDP Target.createTarget call frequently
-  // times out ("context deadline exceeded") under normal load.
+  // Get the active tab ID from snapshot (read-only — never creates a new Chrome target).
+  // Then navigate via JS eval instead of /navigate (which always calls Target.createTarget
+  // and fails with "context deadline exceeded" on this machine).
   const applyUrl = toApplyUrl(job.url)
   let tabId: string
   try {
-    tabId = await client.navigateCurrentTab(applyUrl)
+    const activeTabId = await client.getActiveTabId()
+    console.log(`[autofill] run=${run.id} activeTabId=${activeTabId ?? '(none)'}`)
+    tabId = activeTabId ?? 'default'
     runRegistry.setTabId(run.id, tabId)
-    // Wait for the page to leave about:blank. Retry the navigate once if the
-    // first attempt times out (redirect chains can take a while).
-    let loadedUrl = await client.waitForLoad(12_000)
+
+    runRegistry.publish(run.id, 'status', { stage: 'navigating', tabId, url: applyUrl })
+    await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
+
+    // Wait for the page to load after the JS navigation.
+    let loadedUrl = await client.waitForLoad(15_000)
     if (!loadedUrl) {
+      // One retry — navigateViaEval again in case the first eval fired too early.
       runRegistry.publish(run.id, 'status', { stage: 'nav_retry', url: applyUrl })
-      await client.navigate(applyUrl)
-      loadedUrl = await client.waitForLoad(10_000)
+      await client.navigateViaEval(applyUrl, tabId === 'default' ? undefined : tabId)
+      loadedUrl = await client.waitForLoad(12_000)
     }
     if (!loadedUrl) {
-      throw new Error(`Page did not load after navigation: ${applyUrl}`)
+      throw new Error(`Page did not load after eval navigation: ${applyUrl}`)
     }
-    runRegistry.publish(run.id, 'status', { stage: 'tab_opened', tabId, url: loadedUrl })
+    runRegistry.publish(run.id, 'status', { stage: 'tab_ready', tabId, url: loadedUrl })
   } catch (err) {
-    runRegistry.publish(run.id, 'error', { message: `Failed to open tab: ${(err as Error).message}` })
+    runRegistry.publish(run.id, 'error', { message: `Failed to navigate to application: ${(err as Error).message}` })
     runRegistry.setStatus(run.id, 'failed')
     return
   }

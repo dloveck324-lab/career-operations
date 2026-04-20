@@ -197,6 +197,44 @@ export class PinchTabClient {
   }
 
   /**
+   * Return the active tab's ID by reading the frameId embedded in the snapshot.
+   * This is a read-only operation — it does NOT create a new Chrome target.
+   */
+  async getActiveTabId(): Promise<string | null> {
+    try {
+      const snap = await this.snap()
+      const first = snap.nodes?.[0]
+      if (first && 'frameId' in first) return (first as typeof first & { frameId: string }).frameId
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Navigate the current tab via JS eval (`window.location.href = url`).
+   * Uses Runtime.evaluate CDP — does NOT call Target.createTarget, so it
+   * never fails with "context deadline exceeded" like /navigate does.
+   */
+  async navigateViaEval(url: string, tabId?: string): Promise<void> {
+    const env: Record<string, string> = { ...process.env as Record<string, string> }
+    if (tabId) env['PINCHTAB_TAB'] = tabId
+    await new Promise<void>((resolve, reject) => {
+      const { spawn } = require('child_process') as typeof import('child_process')
+      const child = spawn('pinchtab', ['eval', `window.location.href=${JSON.stringify(url)}`], {
+        env, stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let stderr = ''
+      child.stderr?.on('data', (c: Buffer) => { stderr += c.toString() })
+      child.on('close', (code: number | null) => {
+        if (code !== 0) reject(new Error(`pinchtab eval navigate failed (exit ${code}): ${stderr.trim()}`))
+        else resolve()
+      })
+      child.on('error', reject)
+    })
+  }
+
+  /**
    * Poll the active tab's URL until it's no longer a blank/new-tab page.
    * Returns the loaded URL on success, or '' on timeout.
    */
