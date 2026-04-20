@@ -25,14 +25,25 @@ apps/server/src/
   routes/jobs.ts        — GET /api/jobs, PATCH /api/jobs/:id/status
   routes/scan.ts        — POST /api/scan, GET /api/scan/events (SSE)
   routes/evaluate.ts    — POST /api/evaluate, POST /api/evaluate/:id
-  routes/settings.ts    — GET/PUT /api/settings/*, health checks
-  routes/apply.ts       — POST /api/apply/:id
+  routes/settings.ts    — GET/PUT /api/settings/*, PATCH field-mappings/:id
+  routes/apply.ts       — POST /api/apply/:id, SSE events, save-mappings
   scanner/runner.ts     — orchestrates all adapters, writes to DB
   scanner/adapters/     — greenhouse.ts, ashby.ts, lever.ts, indeed-rss.ts
-  claude/evaluator.ts   — spawns claude -p, parses JSON eval response
+  claude/evaluator.ts   — spawns `claude -p /job-evaluator`, parses JSON
   autofill/pinchtab.ts  — PinchTab HTTP client
-  autofill/autofill.ts  — form fill flow: cache lookup → Claude → PinchTab fill
+  autofill/autofill.ts  — orchestrates autofill run: detects ATS, renders
+                          mapping placeholders, spawns `claude /autofiller`,
+                          parses structured JSON, emits suggestions event
+  autofill/runs.ts      — per-run state + event stream (SSE source)
   import/wizard.ts      — one-shot import from Dave's job search/
+
+.claude/skills/
+  job-evaluator/SKILL.md    — JSON-scoring skill invoked by evaluator
+  autofiller/SKILL.md       — lean base skill (invoked by autofill)
+  autofiller/ats/*.md       — per-ATS notes (greenhouse/lever/ashby/
+                              workday/generic) inlined by hostname match
+  autofiller/uploads.md     — pinchtab upload guidance (resume PDF)
+  autofiller/dialogs.md     — native JS dialog detection/handling
 
 apps/web/src/
   api.ts                — all fetch calls to the server (single import)
@@ -69,8 +80,10 @@ scanned → prescreened → evaluated → applied → interview → completed
 - **`db/queries.ts` is the only file that touches SQLite.** Routes call queries, never `db.prepare()` directly.
 - **`api.ts` is the only file that calls `fetch`.** Components import from `api.ts`, never call fetch directly.
 - **Claude CLI is the only LLM pathway.** No Anthropic SDK, no OpenAI. Spawn `claude -p ... --dangerously-skip-permissions`.
-- **PinchTab NEVER clicks Submit.** `autofill.ts` stops at the submit button and calls `showBrowser()` so the user reviews first.
-- **Config files are the source of truth for user data.** `config/profile.yml` and `config/cv.md` are read at evaluation time, not cached in DB.
+- **Evaluator and autofill are driven by skills, not inline prompts.** Evaluator invokes `/job-evaluator`. Autofill invokes `/autofiller` — `autofill.ts` only assembles the thin invocation (job, profile, rendered mappings, CV, ATS-specific notes, upload/dialog guidance).
+- **PinchTab NEVER clicks Submit.** The `autofiller` skill explicitly stops before Submit; the user reviews in Chrome and submits manually.
+- **Config files are the source of truth for user data.** `config/profile.yml`, `config/cv.md`, and optionally `config/cv.pdf` are read at run time, not cached in DB.
+- **Mapping answers support placeholders.** `[[company_name]]`, `[[job_title]]`, `[[job_url]]` are rendered server-side before the agent sees them. `[[from_cv]]` / `[[from_jd]]` are left as directives for the agent to write an original answer grounded in the CV or JD.
 
 ## DB Tables (brief)
 
@@ -134,12 +147,13 @@ Auto-imported from `Dave's job search/` on first boot if missing. All editable v
 
 | File | Created by | Purpose |
 |---|---|---|
-| `config/profile.yml` | Auto-import / Settings → Profile | Personal info, target roles, prescreen rules |
+| `config/profile.yml` | Auto-import / Settings → Profile | Personal info, target roles, prescreen rules. Optional `cv_pdf_path` for a custom resume location |
 | `config/filters.yml` | Auto-import / Settings → Filters | Portal list, title filter, job board queries |
 | `config/cv.md` | Auto-import / Settings → CV | CV in markdown, injected into eval prompts |
+| `config/cv.pdf` *(optional)* | User drop-in | Resume PDF uploaded by autofill to file inputs. Fallbacks: `config/resume.pdf`, `profile.cv_pdf_path`. If none present, resume fields go to `skipped` |
 | `config/filters.example.yml` | Repo | Fallback template if auto-import has no source |
 
-**Never commit** `config/profile.yml` or `config/cv.md` — they contain personal data (.gitignore enforces this).
+**Never commit** `config/profile.yml`, `config/cv.md`, or `config/cv.pdf` — they contain personal data (.gitignore enforces this).
 
 ## Development
 
@@ -182,6 +196,9 @@ When the user reports startup or runtime issues, follow this checklist before to
 | Jobs not appearing after SCAN | No portals enabled in `config/filters.yml`, or file missing |
 | Evaluate button does nothing | Claude CLI not found (`which claude` returns nothing) |
 | Autofill opens blank tab | PinchTab daemon not running |
+| Autofill skips resume upload | No `config/cv.pdf` / `config/resume.pdf` / `profile.cv_pdf_path` configured |
+| Autofill run exits with `blocked: Authentication required` | ATS (Workday/LinkedIn/etc) requires sign-in. User must log in manually in Chrome, then retry Apply |
+| Field mapping edits don't persist | Should auto-save on blur; check network tab for `PATCH /api/settings/field-mappings/:id` |
 | Server crashes on boot | Port 3001 in use, or Node < 20 |
 | Score shows "N/A" | Evaluation failed — check server logs for Claude CLI error |
 
@@ -216,7 +233,17 @@ node scripts/represcreen.mjs             # apply
 | Scan | `config/filters.yml` only |
 | Prescreen | `config/profile.yml` → prescreen block only |
 | Evaluate | `config/profile.yml` + `config/cv.md` |
-| Autofill | `config/profile.yml` candidate block + `config/cv.md` (for miss fields only) |
+| Autofill | `config/profile.yml` candidate block + `config/cv.md` (grounding for open-ended answers) + `config/cv.pdf` if present (uploaded to resume fields) + `.claude/skills/autofiller/ats/<detected>.md` by hostname + `.claude/skills/autofiller/{uploads,dialogs}.md` |
+
+## Autofill Skill Flow (important for debugging)
+
+1. User clicks Apply on a job. `apps/server/src/autofill/autofill.ts` creates a `Run` in `runs.ts`, opens a dedicated PinchTab tab, and navigates to the job's apply URL (rewritten by `toApplyUrl()` for Lever/Ashby/Workable).
+2. `buildAgentPrompt()` assembles a thin `/autofiller` skill invocation: Job block, Candidate Profile JSON, rendered Known Mappings (placeholders substituted), CV text, and inlined `ats/<detected>.md` + `uploads.md` + `dialogs.md`.
+3. Claude CLI is spawned with `--input-format stream-json --output-format stream-json`. stdout events feed `runRegistry.publish()` → SSE → `AutofillChatPanel`.
+4. On close, `parseAgentResult()` extracts the strict JSON block. `suggestions` (fresh answers the agent generated, not from mappings/profile) are stored on the run and published as a `'suggestions'` event before `'done'`.
+5. UI shows a review panel with editable answers + checkboxes. On "Save selected", `POST /api/apply/runs/:runId/save-mappings` inserts rows via `saveFieldMappingIfMissing` — closing the learning loop.
+
+**Never bypass the skill.** If you need to change autofill behavior, edit `.claude/skills/autofiller/SKILL.md`, the relevant `ats/*.md`, or `uploads.md` / `dialogs.md`. Do NOT move logic into `autofill.ts` — the skill is the source of truth for agent behavior.
 
 ## Commit & Version Bump — Regra Obrigatória
 

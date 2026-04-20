@@ -85,14 +85,33 @@ For a deeper analysis on a specific job, open the job drawer and click **Deep Ev
 
 ### Apply to a job
 
-Open a job from the **Evaluated** tab and click **Apply**. This:
-1. Looks up cached answers for known form fields
-2. Uses Claude to answer any new fields
-3. Opens the application form in a browser via PinchTab
-4. Fills in the form automatically
-5. **Stops before submitting** — you review and click Submit manually
+Open a job from the **Evaluated** tab and click **Apply**. The autofill agent (driven by the `autofiller` Claude Code skill at `.claude/skills/autofiller/`) will:
+
+1. Open the application form in a new tab via PinchTab.
+2. Fill fields using, in order: cached **Field Mappings** → structured **Profile** JSON → original grounded answers from your **CV** and the **JD**.
+3. Inline per-ATS guidance (Greenhouse, Lever, Ashby, Workday) based on the URL.
+4. Upload your resume PDF if `config/cv.pdf` (or `config/resume.pdf`) is present.
+5. **Stop before submitting** — review in Chrome and click Submit yourself.
+
+The sidebar chat streams the agent's actions live. When the run finishes, any answer the agent *generated* (i.e. no cached mapping matched) appears in a **"Save these answers as field mappings?"** panel with inline-editable text and checkboxes. Confirm the ones you want kept, and they become cached rows — the next autofill run uses them directly. This is the self-healing loop.
 
 Applied jobs move to the **Applied** tab.
+
+### Field Mappings
+
+**Settings → Field Mappings** shows every cached form answer. Edits are inline and auto-save on blur.
+
+Answers support placeholders that are rendered fresh for each job:
+
+| Placeholder | Replaced with |
+|---|---|
+| `[[company_name]]` | The target company |
+| `[[job_title]]` | The role title |
+| `[[job_url]]` | The application URL |
+| `[[from_cv]]` | Kept as a directive — the agent writes a 2–4 sentence answer grounded in your CV |
+| `[[from_jd]]` | Kept as a directive — the agent writes a 2–4 sentence answer grounded in the job description |
+
+Example: an answer of `I'm excited about [[company_name]] because [[from_jd]]` lets one mapping adapt to every job.
 
 ## Project Structure
 
@@ -117,6 +136,7 @@ These live in `config/` and are **not committed** (personal data):
 | `config/profile.yml` | Your info, target roles, compensation, prescreen rules |
 | `config/filters.yml` | Portal list, job board queries, title filters |
 | `config/cv.md` | Your CV in Markdown — injected into AI eval prompts |
+| `config/cv.pdf` *(optional)* | Resume PDF — uploaded by autofill when a form has a resume file input. Falls back to `config/resume.pdf` or `profile.cv_pdf_path` |
 
 A template is available at `config/filters.example.yml`.
 
@@ -161,6 +181,14 @@ node -v   # must be ≥ 20
 **Autofill opens a blank tab**
 - Ensure PinchTab daemon is running: `pinchtab daemon status`
 - Check the topbar health badge
+
+**Autofill skips the resume upload**
+- The agent only uploads if it finds a PDF at `config/cv.pdf`, `config/resume.pdf`, or the path you set in `profile.cv_pdf_path`
+- File inputs without a configured source are added to `skipped` and you upload them manually before submitting
+
+**Autofill agent gets stuck on a form step**
+- Native JS dialogs (`alert` / `confirm` / `beforeunload`) freeze the page. If the agent seems stuck, it will run `pinchtab dialog` to detect and handle them
+- Workday and other account-walled ATSs exit early with `blocked: "Authentication required"` — sign in to the ATS in Chrome, then re-run Apply
 
 ## Documentation
 
