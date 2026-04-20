@@ -117,6 +117,7 @@ export class RunRegistry {
     if (!run) return
     run.child = child
     run.status = 'running'
+    this.publish(runId, 'status', { status: 'running' })
   }
 
   setStatus(runId: string, status: RunStatus, extra: Record<string, unknown> = {}): void {

@@ -194,6 +194,16 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
 
     let buf = ''
     let finalText = ''
+    let finalized = false
+    const finalizeOnce = () => {
+      if (finalized) return
+      finalized = true
+      clearTimeout(timer)
+      finalizeRun(run, job, finalText)
+      // Close stdin so the CLI can exit cleanly; the close handler will no-op
+      // because status is already 'done' (or 'failed' on blocked).
+      try { child.stdin.end() } catch { /* ignore */ }
+    }
     child.stdout.on('data', (c: Buffer) => {
       // Reset inactivity timer on every chunk of output
       clearTimeout(timer)
@@ -235,6 +245,10 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
           } else if (ev.type === 'result' && ev.result) {
             finalText = ev.result
             runRegistry.publish(run.id, 'result', { text: finalText })
+            // The 'result' event is terminal for this turn; with stream-json
+            // input the CLI would otherwise sit idle waiting for more stdin
+            // until the inactivity timer kills it. Finalize immediately.
+            finalizeOnce()
           }
           // Opportunistic compaction check after each event batch
           runRegistry.maybeCompact(run.id)
@@ -264,10 +278,13 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
       // Cancelled: cancel() already published done — nothing more to do.
       if (run.status === 'cancelled') { resolveFn(); return }
 
+      // Already finalized on the 'result' event — nothing more to do.
+      if (finalized) { resolveFn(); return }
+
       // Timeout with partial result: Claude finished its work but the process
       // didn't exit before the inactivity window. Treat as success.
       if (timedOut) {
-        finalizeRun(run, job, finalText)
+        finalizeOnce()
         resolveFn()
         return
       }
@@ -281,7 +298,7 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
         return
       }
 
-      finalizeRun(run, job, finalText)
+      finalizeOnce()
       resolveFn()
     })
   })
