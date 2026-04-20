@@ -24,6 +24,7 @@ export interface ClaudeUsage {
   totalTokens: number
   renewalDate: string
   // From claude.ai OAuth API — null if unavailable
+  sessionUtilization: number | null
   weeklyUtilization: number | null
   weeklyResetsAt: string | null
   sonnetUtilization: number | null
@@ -127,6 +128,7 @@ async function getClaudeUsage(): Promise<ClaudeUsage> {
   const [local, oauth] = await Promise.all([getLocalUsage(), fetchOAuthUsage()])
   return {
     ...local,
+    sessionUtilization: oauth?.five_hour?.utilization ?? null,
     weeklyUtilization: oauth?.seven_day?.utilization ?? null,
     weeklyResetsAt: oauth?.seven_day?.resets_at ?? null,
     sonnetUtilization: oauth?.seven_day_sonnet?.utilization ?? null,

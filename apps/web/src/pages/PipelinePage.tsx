@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Box, Tabs, Tab, Paper, Chip, Typography, Stack, Badge,
   TextField, InputAdornment, Button, CircularProgress, Avatar,
@@ -192,26 +192,40 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   // strokeDashoffset controls arc length: C = empty, 0 = full circle
   const dashoffset = C * (1 - fill)
 
-  const resetsAt = usage?.weeklyResetsAt
-    ? new Date(usage.weeklyResetsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null
-  const renewalLabel = resetsAt
-    ?? (usage ? new Date(usage.renewalDate + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
+  const resetDate = usage?.weeklyResetsAt
+    ? new Date(usage.weeklyResetsAt)
+    : usage ? new Date(usage.renewalDate + 'T12:00') : null
 
-  const weeklyLabel = usage?.weeklyUtilization !== null && usage?.weeklyUtilization !== undefined
+  const resetLabel = resetDate
+    ? resetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—'
+
+  const resetRelative = (() => {
+    if (!resetDate) return ''
+    const diff = resetDate.getTime() - Date.now()
+    if (diff <= 0) return ''
+    const hours = diff / (1000 * 60 * 60)
+    return hours < 24 ? ` (${Math.ceil(hours)}h)` : ` (${Math.ceil(hours / 24)}d)`
+  })()
+
+  const sessionLabel = usage?.sessionUtilization != null
+    ? `${usage.sessionUtilization}%`
+    : '—'
+
+  const weeklyLabel = usage?.weeklyUtilization != null
     ? `${usage.weeklyUtilization}%`
     : usage ? `${usage.messages} msgs` : '—'
 
-  const sonnetLabel = usage?.sonnetUtilization !== null && usage?.sonnetUtilization !== undefined
+  const sonnetLabel = usage?.sonnetUtilization != null
     ? `${usage.sonnetUtilization}%`
     : usage ? fmtTokens(usage.sonnetTokens) + ' tok' : '—'
 
   const tip = (
     <Box sx={{ fontSize: 11, lineHeight: 1.8, py: 0.25 }}>
-      <Box>Sessions <strong>{usage?.sessions ?? '—'}</strong></Box>
+      <Box>Current Session <strong>{sessionLabel}</strong></Box>
       <Box>Weekly <strong>{weeklyLabel}</strong></Box>
       <Box>Sonnet <strong>{sonnetLabel}</strong></Box>
-      <Box>Resets <strong>{renewalLabel}</strong></Box>
+      <Box>Reset {resetLabel}<strong>{resetRelative}</strong></Box>
     </Box>
   )
 
@@ -313,6 +327,9 @@ export function PipelinePage() {
   const greeting = useMemo(() => getGreeting(), [])
   const wittyMessage = SESSION_WITTY_MESSAGE
 
+  // Accumulated scan stats — prevents partial events from resetting counters mid-run
+  const scanAcc = useRef({ existing: 0, added: 0, reskipped: 0, linkClosed: 0 })
+
   // Scan / evaluate state
   const [scanning, setScanning] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
@@ -392,28 +409,41 @@ export function PipelinePage() {
   useEffect(() => {
     const handler = (e: Event) => {
       const evt = (e as CustomEvent<ScanEvent>).detail
-      if (evt.type === 'start') { setScanning(true); setScanToast({ text: 'Scanning portals...', severity: 'info' }) }
+      if (evt.type === 'start') {
+        scanAcc.current = { existing: 0, added: 0, reskipped: 0, linkClosed: 0 }
+        setScanning(true)
+        setScanToast({ text: 'Scanning portals...', severity: 'info' })
+      }
       if (evt.type === 'progress') {
-        const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        const re = String(evt.existing ?? 0).padStart(4, '0')
-        const nw = String(evt.added ?? 0).padStart(2, '0')
-        const cl = String(closed).padStart(2, '0')
-        setScanToast({ text: `re-scan: ${re} · new: ${nw} · closed: ${cl}${evt.company ? ` · ${evt.company}` : ''}`, severity: 'info' })
+        const acc = scanAcc.current
+        if (evt.existing != null) acc.existing = Math.max(acc.existing, evt.existing)
+        if (evt.added != null) acc.added = Math.max(acc.added, evt.added)
+        if (evt.reskipped != null) acc.reskipped = Math.max(acc.reskipped, evt.reskipped)
+        if (evt.linkClosed != null) acc.linkClosed = Math.max(acc.linkClosed, evt.linkClosed)
+        const re = String(acc.existing).padStart(4, '0')
+        const nw = String(acc.added).padStart(2, '0')
+        const cl = String(acc.reskipped + acc.linkClosed).padStart(2, '0')
+        const suffix = evt.company ? ` · ${evt.company}` : evt.message ? ` · ${evt.message}` : ''
+        setScanToast({ text: `re-scan: ${re} · new: ${nw} · closed: ${cl}${suffix}`, severity: 'info' })
       }
       if (evt.type === 'done') {
         setScanning(false)
-        const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        const re = String(evt.existing ?? 0).padStart(4, '0')
-        const nw = String(evt.added ?? 0).padStart(2, '0')
-        const cl = String(closed).padStart(2, '0')
+        const acc = scanAcc.current
+        if (evt.existing != null) acc.existing = Math.max(acc.existing, evt.existing)
+        if (evt.added != null) acc.added = Math.max(acc.added, evt.added)
+        if (evt.reskipped != null) acc.reskipped = Math.max(acc.reskipped, evt.reskipped)
+        if (evt.linkClosed != null) acc.linkClosed = Math.max(acc.linkClosed, evt.linkClosed)
+        const re = String(acc.existing).padStart(4, '0')
+        const nw = String(acc.added).padStart(2, '0')
+        const cl = String(acc.reskipped + acc.linkClosed).padStart(2, '0')
         setScanToast({ text: `Done — re-scan: ${re} · new: ${nw} · closed: ${cl}`, severity: 'success' })
       }
       if (evt.type === 'scan_paused') {
         setScanning(false)
-        const closed = (evt.reskipped ?? 0) + (evt.linkClosed ?? 0)
-        const re = String(evt.existing ?? 0).padStart(4, '0')
-        const nw = String(evt.added ?? 0).padStart(2, '0')
-        const cl = String(closed).padStart(2, '0')
+        const acc = scanAcc.current
+        const re = String(acc.existing).padStart(4, '0')
+        const nw = String(acc.added).padStart(2, '0')
+        const cl = String(acc.reskipped + acc.linkClosed).padStart(2, '0')
         setScanToast({ text: `Paused — re-scan: ${re} · new: ${nw} · closed: ${cl}`, severity: 'warning' })
       }
       if (evt.type === 'eval_queued' && evt.jobIds) { setEvalQueueIds(new Set(evt.jobIds)) }

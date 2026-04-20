@@ -68,6 +68,7 @@ export interface ClaudeUsage {
   haikuTokens: number
   totalTokens: number
   renewalDate: string
+  sessionUtilization: number | null
   weeklyUtilization: number | null
   weeklyResetsAt: string | null
   sonnetUtilization: number | null
