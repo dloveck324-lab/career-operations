@@ -252,7 +252,7 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
   )
 }
 
-function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]): GridColDef[] { return [
+function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[], showEvaluatedAt = false): GridColDef[] { return [
   {
     field: 'company', headerName: 'Company', flex: 1, minWidth: 160,
     renderCell: ({ value, row }) => (
@@ -312,6 +312,16 @@ function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]
       </Typography>
     ),
   },
+  ...(showEvaluatedAt ? [{
+    field: 'evaluated_at',
+    headerName: 'Evaluated',
+    width: 140,
+    renderCell: ({ value }: GridCellParams) => value ? (
+      <Typography variant="caption" color="text.secondary">
+        {new Date(value as string).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+      </Typography>
+    ) : null,
+  } satisfies GridColDef] : []),
 ]}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -547,7 +557,7 @@ export function PipelinePage() {
 
   useEffect(() => { setSelectionModel([]) }, [tab])
 
-  const columns = useMemo(() => buildColumns(evaluatingJobId, positiveKeywords), [evaluatingJobId, positiveKeywords])
+  const columns = useMemo(() => buildColumns(evaluatingJobId, positiveKeywords, tab === 1), [evaluatingJobId, positiveKeywords, tab])
 
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
