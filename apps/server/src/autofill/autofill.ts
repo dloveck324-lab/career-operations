@@ -202,18 +202,30 @@ async function spawnClaudeAgent(run: Run, prompt: string, tabId: string, job: Jo
       }
 
       // Finalize: parse the last result text and maybe advance the job status
-      const { filled, skipped, blocked } = parseAgentSummary(finalText)
+      const { filled, skipped, blocked, suggestions } = parseAgentResult(finalText)
+      const skippedLabel = skipped.length > 0 ? String(skipped.length) : ''
+      const suggestionItems = suggestions.map((s, i) => ({ id: `s${i}`, ...s }))
+
+      // Publish suggestions BEFORE done so late subscribers replay both.
+      if (suggestionItems.length > 0) {
+        runRegistry.setSuggestions(run.id, suggestionItems)
+        runRegistry.publish(run.id, 'suggestions', { items: suggestionItems })
+      }
+
+      const suggestionHint = suggestionItems.length > 0
+        ? ` ${suggestionItems.length} new answer${suggestionItems.length === 1 ? '' : 's'} to review.`
+        : ''
       const shortMsg = blocked
         ? `Blocked: ${blocked}`
-        : `Form filled (${filled} fields${skipped ? `, ${skipped} skipped` : ''}). Review in Chrome and submit when ready.`
+        : `Form filled (${filled} fields${skippedLabel ? `, ${skippedLabel} skipped` : ''}).${suggestionHint} Review in Chrome and submit when ready.`
 
       if (run.status !== 'cancelled' && !blocked) {
         updateJobStatus(job.id, 'ready_to_submit')
-        runRegistry.setStatus(run.id, 'done', { summary: shortMsg, filled, skipped, blocked })
+        runRegistry.setStatus(run.id, 'done', { summary: shortMsg, filled, skipped: skippedLabel, blocked, suggestionCount: suggestionItems.length })
       } else if (blocked) {
         runRegistry.setStatus(run.id, 'failed', { summary: shortMsg, blocked })
       }
-      runRegistry.publish(run.id, 'done', { summary: shortMsg })
+      runRegistry.publish(run.id, 'done', { summary: shortMsg, suggestionCount: suggestionItems.length })
       runRegistry.prune()
       resolveFn()
     })
@@ -253,6 +265,24 @@ function toApplyUrl(url: string): string {
   }
 }
 
+/**
+ * Replace placeholder tokens in a mapping answer before the agent ever sees it.
+ *
+ * `[[company_name]]`, `[[job_title]]`, `[[job_url]]` are rendered to the job's
+ * values here so the agent can use them verbatim. `[[from_cv]]` / `[[from_jd]]`
+ * get a directive the skill understands — the agent writes an original answer
+ * and reports it as a suggestion. Unknown tokens are left as-is.
+ */
+export function renderMappingAnswer(answer: string, job: Job): string {
+  if (!answer) return answer
+  return answer
+    .replace(/\[\[company_name\]\]/g, job.company ?? '')
+    .replace(/\[\[job_title\]\]/g, job.title ?? '')
+    .replace(/\[\[job_url\]\]/g, job.url ?? '')
+    .replace(/\[\[from_cv\]\]/g, '[agent: write an original answer grounded in the CV]')
+    .replace(/\[\[from_jd\]\]/g, '[agent: write an original answer grounded in the job description]')
+}
+
 function buildAgentPrompt(
   job: Job,
   profile: ReturnType<typeof loadProfile>,
@@ -264,100 +294,122 @@ function buildAgentPrompt(
   const p = profile.candidate as CandidateProfile
   const candidateJson = JSON.stringify(p, null, 2)
 
-  const fieldHintsLines: string[] = []
-  for (const [k, v] of Object.entries(p)) {
-    if (v && typeof v === 'string') fieldHintsLines.push(`- ${k.replace(/_/g, ' ')}: ${v}`)
-  }
+  const mappingsLines = mappings
+    .map(m => `- "${m.question}" → "${renderMappingAnswer(m.answer, job)}"`)
+    .join('\n')
 
-  const mappingsLines = mappings.map(m => `- "${m.question}" → "${m.answer}"`).join('\n')
+  const cvBlock = cv ? cv.slice(0, 5000) : '(no CV provided)'
 
-  return `You are an autonomous job-application agent. Use the \`pinchtab\` CLI (already installed, authenticated, and pointing at a running *headed* Chrome instance) to open the job's application form and fill it out as completely and accurately as possible.
-
-## PinchTab environment (do not change it)
-- Headed Chrome is running on port 9868 (CLI default). A dedicated tab has been opened for this run; its ID is already exported as \`PINCHTAB_TAB=${tabId}\`, so every \`pinchtab\` command you run targets YOUR tab — do not pass \`--tab\` explicitly and do not operate on other tabs.
-- DO NOT run \`pinchtab daemon ...\`, \`pinchtab tab close\`, or any instance/process kill command.
-- \`navigation_changed\` errors mean the page navigated after your click — treat as success and re-snapshot.
+  return `/autofiller
 
 ## Job
 - Title: ${job.title}
 - Company: ${job.company}
 - Application URL: ${job.url}
 
-## Sources of truth (use them IN THIS ORDER when filling any field)
+## PinchTab tab (targeted automatically)
+PINCHTAB_TAB=${tabId} is already exported; every \`pinchtab\` command targets YOUR tab — do not pass --tab and do not operate on other tabs.
 
-### 1) Known field mappings (fastest — use first)
-These are canonical question → answer pairs already curated for this candidate. If a form field's label matches (or is a close paraphrase of) any question below, use the mapped answer directly — DO NOT ask Claude for a new answer.
+Bulk fill helper (for text-field batches): \`bash ${QUICKFILL_SCRIPT} '[{"ref":"e3","value":"..."}]'\`
 
-${mappingsLines}
-
-### 2) Candidate profile JSON (structured fallback)
+## Candidate Profile (JSON)
 \`\`\`json
 ${candidateJson}
 \`\`\`
 
-Readable field list:
-${fieldHintsLines.join('\n')}
+## Known field mappings (use first — fastest path)
+${mappingsLines || '(none — fall back to profile JSON and CV for every field)'}
 
-### 3) CV (for open-ended answers — "why this role", "tell us about yourself", "optional note to hiring team", etc.)
-${cv ? cv.slice(0, 5000) : '(no CV provided)'}
-
-## PinchTab CLI
-- \`pinchtab snap -i -c\` — interactive elements (refs like e3 with roles and labels)
-- \`pinchtab text\` — readable page text
-- \`pinchtab fill <ref|css> <value>\` — text/textarea
-- \`pinchtab select <ref|css> <value-or-visible-text>\` — <select> dropdowns (matches option value first, then visible text)
-- \`pinchtab click <ref|css>\` — checkboxes, radios, custom dropdowns, Apply / Next buttons
-- \`pinchtab press <key>\` — Tab, Enter, Escape, ArrowDown
-- \`pinchtab find "<query>"\` — semantic element search
-- \`pinchtab eval "<js>"\` — JS in the page (use for custom React dropdowns when \`select\` doesn't work)
-
-### Bulk fill helper — USE THIS for text fields you matched against mappings or profile
-\`bash ${QUICKFILL_SCRIPT} '[{"ref":"e3","value":"Vinicius"},{"ref":"#email","value":"x@y.com"}]'\`
-Pass every plain text/email/URL/phone field in one call. Far fewer turns than individual \`pinchtab fill\`s.
-
-### Location autocompletes (Ashby, Greenhouse, Lever are all similar)
-Location fields usually LOOK like a text input but are actually a combobox that only commits the value once you click a suggestion from a dropdown that appears mid-typing. \`pinchtab fill\` alone won't work. The reliable pattern:
-1. \`pinchtab click <ref of the location input>\` to focus it.
-2. \`pinchtab type <ref> "<first few chars of the city>"\` (e.g. "San Franci") — this fires keystroke events the widget listens for. DO NOT use \`fill\` here.
-3. \`pinchtab snap -i -c\` — the dropdown options now appear as new refs.
-4. \`pinchtab click <ref of the matching option>\` (exact text match like "San Francisco, CA, United States").
-5. Re-snap to confirm the value stuck.
-
-If \`type\` still doesn't open the dropdown (rare but happens on fancy React inputs), fall back to \`pinchtab eval\` and dispatch an \`input\` event manually, e.g. \`pt eval "(() => { const el = document.querySelector('input[name=location]'); el.focus(); el.value='San Francisco'; el.dispatchEvent(new Event('input',{bubbles:true})); })()"\` then re-snap and click the option.
-
-## Your task (follow this order exactly)
-1. Run \`pinchtab text\` to check the current page. If it is blank, an error page, or not the application form, run \`pinchtab navigate ${job.url}\` and wait a few seconds before proceeding.
-2. \`pinchtab snap -i -c\` to map every interactive element.
-3. **Pass 1 — mapping-driven quickfill**: for every input/radio/select/checkbox whose label matches a known mapping above, collect {ref, value} pairs and fire them through the quickfill helper in ONE call. This includes work authorization, sponsorship, background check consent, "can we contact you about other roles", and all the name/email/URL/etc fields.
-4. **Pass 2 — profile-driven fill**: any remaining text fields that correspond to truthy profile JSON fields (GitHub, portfolio, current_company, years_of_experience, how_did_you_hear, gender, pronouns, etc.) — fill them too. Batch with quickfill when possible.
-5. **Pass 3 — radios & dropdowns for profile fields**: for radios/selects driven by profile values (gender, work auth, sponsorship, veteran/disability), click the right option. Skip when the profile value is empty.
-6. **Pass 4 — open-ended questions**: write a concise, honest answer for every required open-ended text area the mappings + profile couldn't answer. This INCLUDES optional-looking fields like "Optional Note to Hiring Team", "Anything else you'd like us to know?", "Why are you interested?", cover letter paragraphs. Do NOT skip them as "optional" — a 2-4 sentence grounded note is better than a blank field and meaningfully improves recruiter signal. Ground each answer in the CV and the job posting.
-7. **File uploads** — SKIP. Note them in your summary.
-8. **Multi-step forms** — click Next/Continue, re-snap, repeat passes 1-6. NEVER click Submit / Send application.
-9. When finished (or blocked), stop.
-
-## Output (CRITICAL — short)
-Respond with at most 3 lines, nothing else:
-\`filled: N\`
-\`skipped: <comma-separated field names>\` (omit if none)
-\`blocked: <one-line reason>\` (omit if not blocked)`
+## CV (for open-ended answers)
+${cvBlock}`
 }
 
-function parseAgentSummary(raw: string): { filled: number; skipped: string; blocked: string } {
-  const text = raw.trim()
+export interface AgentResult {
+  filled: number
+  skipped: string[]
+  blocked: string | null
+  suggestions: Array<{ question: string; answer: string }>
+}
+
+/**
+ * Parse the agent's final output. Prefers the strict JSON contract emitted by
+ * the autofiller skill; falls back to the legacy `filled: N / skipped: ... /
+ * blocked: ...` text format so older transcripts don't regress.
+ */
+export function parseAgentResult(raw: string): AgentResult {
+  const text = (raw ?? '').trim()
+
+  // Prefer a fenced ```json ... ``` block (what the skill emits).
+  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i)
+  const jsonCandidate = fenced?.[1] ?? matchLastObject(text)
+
+  if (jsonCandidate) {
+    try {
+      const parsed = JSON.parse(jsonCandidate) as {
+        filled?: unknown
+        skipped?: unknown
+        blocked?: unknown
+        suggestions?: unknown
+      }
+      const filled = typeof parsed.filled === 'number' ? parsed.filled : 0
+      const skipped = Array.isArray(parsed.skipped)
+        ? parsed.skipped.filter((s): s is string => typeof s === 'string')
+        : []
+      const blocked = typeof parsed.blocked === 'string' && parsed.blocked.trim()
+        ? parsed.blocked.trim()
+        : null
+      const suggestions = Array.isArray(parsed.suggestions)
+        ? parsed.suggestions
+            .map((s) => {
+              if (!s || typeof s !== 'object') return null
+              const obj = s as { question?: unknown; answer?: unknown }
+              if (typeof obj.question !== 'string' || typeof obj.answer !== 'string') return null
+              const q = obj.question.trim()
+              const a = obj.answer.trim()
+              if (!q || !a) return null
+              return { question: q, answer: a }
+            })
+            .filter((x): x is { question: string; answer: string } => !!x)
+        : []
+      return { filled, skipped, blocked, suggestions }
+    } catch { /* fall through to legacy parser */ }
+  }
+
+  // Legacy text-format fallback.
   let filled = 0
-  let skipped = ''
-  let blocked = ''
+  let blocked: string | null = null
+  const skipped: string[] = []
   const filledMatch = text.match(/filled\s*[:=]\s*(\d+)/i)
   if (filledMatch) filled = Number(filledMatch[1])
   const skippedMatch = text.match(/skipped\s*[:=]\s*([^\n]+)/i)
-  if (skippedMatch) skipped = skippedMatch[1].trim().replace(/^[-–—]\s*/, '')
+  if (skippedMatch) {
+    const raw = skippedMatch[1].trim().replace(/^[-–—]\s*/, '')
+    for (const part of raw.split(/[,;]/)) {
+      const s = part.trim()
+      if (s) skipped.push(s)
+    }
+  }
   const blockedMatch = text.match(/blocked\s*[:=]\s*([^\n]+)/i)
   if (blockedMatch) blocked = blockedMatch[1].trim()
   if (!filledMatch && !blockedMatch) {
     const fallback = text.match(/(\d+)\s*(fields?\s*filled|filled\s*fields?|fields?\s*completed)/i)
     if (fallback) filled = Number(fallback[1])
   }
-  const skippedCount = skipped ? skipped.split(/[,;]/).filter(Boolean).length : 0
-  return { filled, skipped: skippedCount > 0 ? String(skippedCount) : '', blocked }
+  return { filled, skipped, blocked, suggestions: [] }
+}
+
+/** Find the last balanced `{...}` block in a string (naive brace-matching). */
+function matchLastObject(text: string): string | null {
+  const end = text.lastIndexOf('}')
+  if (end < 0) return null
+  let depth = 0
+  for (let i = end; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === '}') depth++
+    else if (ch === '{') {
+      depth--
+      if (depth === 0) return text.slice(i, end + 1)
+    }
+  }
+  return null
 }

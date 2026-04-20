@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { getJob } from '../db/queries.js'
+import { getJob, saveFieldMappingIfMissing } from '../db/queries.js'
 import { startAutofill, type AutofillModel } from '../autofill/autofill.js'
 import { runRegistry } from '../autofill/runs.js'
 
@@ -131,6 +131,32 @@ export async function applyRoutes(app: FastifyInstance) {
       throw app.httpErrors.badRequest(`Run is ${run.status} and not resumable`)
     }
     return { ok: true }
+  })
+
+  /**
+   * Persist agent-generated answers back into the field_mappings cache so the
+   * next run hits them instantly. Uses INSERT OR IGNORE so we never clobber an
+   * existing curated answer.
+   */
+  app.post('/apply/runs/:runId/save-mappings', async (req) => {
+    const { runId } = req.params as { runId: string }
+    const body = z.object({
+      items: z.array(z.object({
+        question: z.string().min(1),
+        answer: z.string().min(1),
+      })).min(1),
+    }).parse(req.body)
+
+    const run = runRegistry.get(runId)
+    if (!run) throw app.httpErrors.notFound('Run not found')
+
+    let saved = 0
+    let skipped = 0
+    for (const item of body.items) {
+      if (saveFieldMappingIfMissing(item.question, item.answer, 'autofill')) saved++
+      else skipped++
+    }
+    return { saved, skipped }
   })
 
   /** Cancel a running autofill. */

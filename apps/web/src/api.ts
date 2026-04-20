@@ -100,6 +100,12 @@ export const api = {
     req<{ ok: boolean }>(`/apply/runs/${runId}/message`, { method: 'POST', body: JSON.stringify({ text }) }),
   applyCancelRun: (runId: string) =>
     req<{ ok: boolean }>(`/apply/runs/${runId}/cancel`, { method: 'POST' }),
+  applySaveMappings: (runId: string, items: Array<{ question: string; answer: string }>) =>
+    req<{ saved: number; skipped: number }>(`/apply/runs/${runId}/save-mappings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    }),
   importStatus: () => req<{ needsImport: boolean; profile: boolean; cv: boolean; filters: boolean }>('/import/status'),
   runImport: () => req<ImportResult>('/import', { method: 'POST' }),
   settings: {

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box, Typography, Paper, Stack, TextField, IconButton, Chip, CircularProgress,
-  Collapse, Button,
+  Collapse, Button, Checkbox, Alert,
 } from '@mui/material'
 import { Send, Cancel, ExpandMore, ExpandLess } from '@mui/icons-material'
 import { api } from '../api.js'
 
 type EventKind =
   | 'prompt' | 'session' | 'thinking' | 'tool' | 'user'
-  | 'compact' | 'status' | 'result' | 'error' | 'done'
+  | 'compact' | 'status' | 'result' | 'error' | 'done' | 'suggestions'
+
+interface Suggestion { id: string; question: string; answer: string }
 
 interface StreamEvent {
   id: number
@@ -29,6 +31,10 @@ export function AutofillChatPanel({ runId }: Props) {
   const [status, setStatus] = useState<'queued' | 'running' | 'done' | 'failed' | 'cancelled'>('queued')
   const [hasSession, setHasSession] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [savingMappings, setSavingMappings] = useState(false)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -41,10 +47,26 @@ export function AutofillChatPanel({ runId }: Props) {
         if (kind === 'status' && typeof payload.status === 'string') setStatus(payload.status as typeof status)
         if (kind === 'done') setStatus(prev => (prev === 'running' ? 'done' : prev))
         if (kind === 'session' && typeof payload.sessionId === 'string') setHasSession(true)
+        if (kind === 'suggestions' && Array.isArray(payload.items)) {
+          const items = (payload.items as Suggestion[]).filter(
+            it => it && typeof it.id === 'string' && typeof it.question === 'string' && typeof it.answer === 'string',
+          )
+          setSuggestions(prev => {
+            const seen = new Set(prev.map(p => p.id))
+            const merged = [...prev]
+            for (const it of items) if (!seen.has(it.id)) merged.push({ id: it.id, question: it.question, answer: it.answer })
+            return merged
+          })
+          setSelected(prev => {
+            const next = new Set(prev)
+            for (const it of items) next.add(it.id)
+            return next
+          })
+        }
       } catch { /* ignore */ }
     }
 
-    const kinds: EventKind[] = ['prompt', 'session', 'thinking', 'tool', 'user', 'compact', 'status', 'result', 'error', 'done']
+    const kinds: EventKind[] = ['prompt', 'session', 'thinking', 'tool', 'user', 'compact', 'status', 'result', 'error', 'done', 'suggestions']
     for (const k of kinds) es.addEventListener(k, handle(k))
     es.onerror = () => { /* browser auto-retries */ }
 
@@ -78,6 +100,43 @@ export function AutofillChatPanel({ runId }: Props) {
   const handleCancel = async () => {
     if (!isRunning) return
     try { await api.applyCancelRun(runId) } catch { /* ignore */ }
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const updateSuggestionAnswer = (id: string, answer: string) => {
+    setSuggestions(prev => prev.map(s => s.id === id ? { ...s, answer } : s))
+  }
+
+  const handleSaveMappings = async () => {
+    const items = suggestions
+      .filter(s => selected.has(s.id))
+      .map(s => ({ question: s.question, answer: s.answer }))
+    if (items.length === 0 || savingMappings) return
+    setSavingMappings(true)
+    try {
+      const { saved, skipped } = await api.applySaveMappings(runId, items)
+      setSavedMessage(`Saved ${saved} mapping${saved === 1 ? '' : 's'}${skipped ? ` (${skipped} already existed)` : ''}`)
+      setSuggestions([])
+      setSelected(new Set())
+      setTimeout(() => setSavedMessage(null), 4000)
+    } catch (err) {
+      setEvents(prev => [...prev, { id: prev.length, kind: 'error', ts: Date.now(), data: { message: `save mappings failed: ${err}` } }])
+    } finally {
+      setSavingMappings(false)
+    }
+  }
+
+  const handleDismissSuggestions = () => {
+    setSuggestions([])
+    setSelected(new Set())
   }
 
   return (
@@ -123,6 +182,82 @@ export function AutofillChatPanel({ runId }: Props) {
         )}
         {events.map(ev => <EventRow key={ev.id} ev={ev} />)}
       </Box>
+
+      {suggestions.length > 0 && (
+        <Box sx={{ borderTop: '1px solid', borderColor: 'divider', p: 1, bgcolor: 'action.hover', maxHeight: 260, overflow: 'auto' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+              Save these answers as field mappings?
+            </Typography>
+            <Button size="small" onClick={handleDismissSuggestions} sx={{ textTransform: 'none', fontSize: '0.7rem', minWidth: 0, px: 0.75 }}>
+              Dismiss
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem', mb: 1 }}>
+            Claude generated these for fields it didn't have a cached answer for. Saving them means the next autofill won't need to regenerate them.
+          </Typography>
+          <Stack spacing={0.75}>
+            {suggestions.map(s => {
+              const isChecked = selected.has(s.id)
+              return (
+                <Box key={s.id} sx={{ display: 'flex', gap: 0.75, alignItems: 'flex-start', bgcolor: 'background.paper', p: 0.75, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                  <Checkbox
+                    size="small"
+                    checked={isChecked}
+                    onChange={() => toggleSelected(s.id)}
+                    sx={{ p: 0.25, mt: '1px' }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      title={s.question}
+                      sx={{ display: 'block', fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    >
+                      {s.question}
+                    </Typography>
+                    <TextField
+                      value={s.answer}
+                      onChange={e => updateSuggestionAnswer(s.id, e.target.value)}
+                      multiline
+                      maxRows={3}
+                      size="small"
+                      fullWidth
+                      disabled={savingMappings}
+                      sx={{
+                        mt: 0.25,
+                        '& .MuiInputBase-input': {
+                          fontFamily: 'ui-monospace, Menlo, monospace',
+                          fontSize: '0.75rem',
+                          whiteSpace: 'pre-wrap',
+                        },
+                      }}
+                    />
+                  </Box>
+                </Box>
+              )
+            })}
+          </Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => void handleSaveMappings()}
+              disabled={selected.size === 0 || savingMappings}
+              startIcon={savingMappings ? <CircularProgress size={12} color="inherit" /> : undefined}
+              sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+            >
+              Save selected ({selected.size})
+            </Button>
+          </Stack>
+        </Box>
+      )}
+
+      {savedMessage && (
+        <Alert severity="success" sx={{ mx: 1, my: 0.5, py: 0, fontSize: '0.75rem' }}>
+          {savedMessage}
+        </Alert>
+      )}
 
       <Stack direction="row" spacing={1} sx={{ p: 1, borderTop: '1px solid', borderColor: 'divider' }}>
         <TextField

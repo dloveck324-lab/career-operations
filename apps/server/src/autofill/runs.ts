@@ -22,6 +22,7 @@ export interface RunEvent {
     | 'compact'          // /compact event injected
     | 'status'           // status transitions
     | 'result'           // final result text
+    | 'suggestions'      // { items: [{id, question, answer}] } — fresh answers the agent produced that aren't in field_mappings yet
     | 'error'            // any error
     | 'done'             // terminal
   data: Record<string, unknown>
@@ -41,6 +42,7 @@ export interface Run {
   subscribers: Set<(ev: RunEvent) => void>
   nextEventId: number
   compacted: number         // how many /compact we've injected
+  suggestions?: Array<{ id: string; question: string; answer: string }>
 }
 
 const MAX_EVENTS = 500      // per-run ring buffer cap
@@ -137,6 +139,16 @@ export class RunRegistry {
     const run = this.runs.get(runId)
     if (!run) return
     run.tabId = tabId
+  }
+
+  setSuggestions(runId: string, items: Array<{ id: string; question: string; answer: string }>): void {
+    const run = this.runs.get(runId)
+    if (!run) return
+    run.suggestions = items
+  }
+
+  getSuggestions(runId: string): Array<{ id: string; question: string; answer: string }> | undefined {
+    return this.runs.get(runId)?.suggestions
   }
 
   /**
