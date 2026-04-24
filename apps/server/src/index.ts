@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import sensible from '@fastify/sensible'
+import cookie from '@fastify/cookie'
 import { jobRoutes } from './routes/jobs.js'
 import { scanRoutes } from './routes/scan.js'
 import { evaluateRoutes } from './routes/evaluate.js'
@@ -8,6 +9,8 @@ import { settingsRoutes } from './routes/settings.js'
 import { applyRoutes } from './routes/apply.js'
 import { portalsRoutes } from './routes/portals.js'
 import { assistantRoutes } from './routes/assistant.js'
+import { authRoutes } from './routes/auth.js'
+import { adminRoutes } from './routes/admin.js'
 import { configExists, loadProfile } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
 import { getTokenUsage, seedFieldMappingsFromProfile } from './db/queries.js'
@@ -23,11 +26,34 @@ const app = Fastify({
 })
 
 await app.register(sensible)
+await app.register(cookie, {
+  secret: process.env.COOKIE_SECRET ?? 'dev-cookie-secret-change-in-production',
+})
 await app.register(cors, {
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: process.env.ALLOWED_ORIGIN
+    ? [process.env.ALLOWED_ORIGIN]
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true,
 })
 
+// Auth guard — skipped in dev (no ALLOWED_EMAIL set)
+if (process.env.ALLOWED_EMAIL) {
+  app.addHook('onRequest', async (req, reply) => {
+    const url = req.url
+    if (url === '/api/health' || url.startsWith('/api/auth/')) return
+    const raw = req.cookies.auth_session
+    if (!raw) return reply.status(401).send({ error: 'Not authenticated' })
+    const { valid, value } = req.unsignCookie(raw)
+    if (!valid || value !== process.env.ALLOWED_EMAIL) {
+      reply.clearCookie('auth_session', { path: '/' })
+      return reply.status(401).send({ error: 'Invalid session' })
+    }
+  })
+}
+
 // Routes
+await app.register(authRoutes, { prefix: '/api' })
+await app.register(adminRoutes, { prefix: '/api' })
 await app.register(jobRoutes, { prefix: '/api' })
 await app.register(scanRoutes, { prefix: '/api' })
 await app.register(evaluateRoutes, { prefix: '/api' })
@@ -44,16 +70,10 @@ app.get('/api/health', async () => {
 
 app.get('/api/import/status', async () => {
   const cfg = configExists()
-  return {
-    needsImport: !cfg.profile || !cfg.cv,
-    sourceExists: true,
-    ...cfg,
-  }
+  return { needsImport: !cfg.profile || !cfg.cv, sourceExists: true, ...cfg }
 })
 
-app.post('/api/import', async () => {
-  return runImportWizard()
-})
+app.post('/api/import', async () => runImportWizard())
 
 // Auto-import from Dave's job search on first boot
 const cfg = configExists()
@@ -78,7 +98,8 @@ if (profile) {
 }
 
 const PORT = Number(process.env.PORT ?? 3001)
-await app.listen({ port: PORT, host: '127.0.0.1' })
-console.log(`Server running on http://127.0.0.1:${PORT}`)
+const HOST = process.env.ALLOWED_EMAIL ? '0.0.0.0' : '127.0.0.1'
+await app.listen({ port: PORT, host: HOST })
+console.log(`Server running on http://${HOST}:${PORT}`)
 
 scheduler.init(PORT, onScanComplete)

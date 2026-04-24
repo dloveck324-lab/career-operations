@@ -129,6 +129,10 @@ export const api = {
   portals: {
     discover: () => req<{ portals: DiscoveredPortal[] }>('/portals/discover'),
   },
+  auth: {
+    me: () => req<{ email: string }>('/auth/me'),
+    logout: () => req<{ ok: true }>('/auth/logout', { method: 'POST' }),
+  },
 }
 
 export type AssistantModel = 'haiku' | 'sonnet' | 'opus'
@@ -143,6 +147,11 @@ export const assistantApi = {
     req<{ ok: true }>(`/assistant/session/${sessionId}/model`, { method: 'POST', body: JSON.stringify({ model }) }),
   endSession: (sessionId: string) =>
     req<{ ok: true }>(`/assistant/session/${sessionId}`, { method: 'DELETE' }),
+}
+
+export const auth = {
+  me: () => req<{ email: string }>('/auth/me'),
+  logout: () => req<{ ok: true }>('/auth/logout', { method: 'POST' }),
 }
 
 export function createSseConnection(path: string, onEvent: (event: unknown) => void): () => void {
