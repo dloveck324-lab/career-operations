@@ -6,7 +6,7 @@ import { SettingsPage } from './pages/SettingsPage.js'
 
 export default function App() {
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', height: { xs: 'auto', sm: '100vh' }, minHeight: { xs: '100dvh', sm: 'unset' }, overflow: { xs: 'auto', sm: 'hidden' } }}>
       <AppShell>
         <Routes>
           <Route path="/" element={<Navigate to="/pipeline" replace />} />

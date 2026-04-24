@@ -10,7 +10,7 @@ import {
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
   LightMode, DarkMode, SettingsBrightness, Settings,
-  SmartToyOutlined,
+  SmartToyOutlined, MoreVert,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -339,6 +339,7 @@ export function PipelinePage() {
   // Header state
   const [firstName, setFirstName] = useState('David')
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<HTMLElement | null>(null)
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<HTMLElement | null>(null)
   const [claudeUsage, setClaudeUsage] = useState<ClaudeUsage | null>(null)
   const greeting = useMemo(() => getGreeting(), [])
   const wittyMessage = SESSION_WITTY_MESSAGE
@@ -653,7 +654,7 @@ export function PipelinePage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: { xs: 'auto', sm: '100%' } }}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Box sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 3 }, pb: 0 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} alignItems="flex-start" justifyContent="space-between" spacing={{ xs: 1, sm: 2 }}>
@@ -757,55 +758,82 @@ export function PipelinePage() {
               </Box>
             </Popover>
 
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-            {/* Assistant */}
-            <Tooltip title="Assistant">
-              <IconButton
-                size="small"
-                onClick={() => assistant.setOpen(!assistant.open)}
-                sx={{ color: assistant.open ? 'primary.main' : 'text.secondary' }}
-              >
-                <SmartToyOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-
-            {/* Theme */}
-            <Tooltip title={`Theme: ${themeModeLabels[themeMode]}`}>
-              <IconButton size="small" onClick={(e) => setThemeMenuAnchor(e.currentTarget)} sx={{ color: 'text.secondary' }}>
-                {(() => { const Icon = themeModeIcons[themeMode]; return <Icon fontSize="small" /> })()}
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={themeMenuAnchor}
-              open={Boolean(themeMenuAnchor)}
-              onClose={() => setThemeMenuAnchor(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => {
-                const Icon = themeModeIcons[m]
-                return (
-                  <MenuItem key={m} selected={themeMode === m} onClick={() => { setThemeMode(m); setThemeMenuAnchor(null) }} sx={{ gap: 1.5, minWidth: 130 }}>
-                    <Icon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    {themeModeLabels[m]}
+            {isMobile ? (
+              <>
+                <IconButton size="small" onClick={e => setMoreMenuAnchor(e.currentTarget)} sx={{ color: 'text.secondary' }}>
+                  <MoreVert fontSize="small" />
+                </IconButton>
+                <Menu
+                  anchorEl={moreMenuAnchor}
+                  open={Boolean(moreMenuAnchor)}
+                  onClose={() => setMoreMenuAnchor(null)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                  <MenuItem onClick={() => { assistant.setOpen(!assistant.open); setMoreMenuAnchor(null) }} sx={{ gap: 1.5 }}>
+                    <SmartToyOutlined fontSize="small" sx={{ color: 'text.secondary' }} /> Assistant
                   </MenuItem>
-                )
-              })}
-            </Menu>
+                  <Divider />
+                  {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => {
+                    const Icon = themeModeIcons[m]
+                    return (
+                      <MenuItem key={m} selected={themeMode === m} onClick={() => { setThemeMode(m); setMoreMenuAnchor(null) }} sx={{ gap: 1.5, minWidth: 150 }}>
+                        <Icon fontSize="small" sx={{ color: 'text.secondary' }} /> {themeModeLabels[m]}
+                      </MenuItem>
+                    )
+                  })}
+                  <Divider />
+                  <MenuItem onClick={() => { navigate(location.pathname === '/settings' ? '/pipeline' : '/settings'); setMoreMenuAnchor(null) }} sx={{ gap: 1.5 }}>
+                    <Settings fontSize="small" sx={{ color: 'text.secondary' }} /> Settings
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <>
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-            <ClaudeUsageDonut usage={claudeUsage} />
+                <Tooltip title="Assistant">
+                  <IconButton size="small" onClick={() => assistant.setOpen(!assistant.open)} sx={{ color: assistant.open ? 'primary.main' : 'text.secondary' }}>
+                    <SmartToyOutlined fontSize="small" />
+                  </IconButton>
+                </Tooltip>
 
-            {/* Settings */}
-            <Tooltip title="Settings">
-              <IconButton
-                size="small"
-                onClick={() => navigate(location.pathname === '/settings' ? '/pipeline' : '/settings')}
-                sx={{ color: location.pathname === '/settings' ? 'primary.main' : 'text.secondary' }}
-              >
-                <Settings fontSize="small" />
-              </IconButton>
-            </Tooltip>
+                <Tooltip title={`Theme: ${themeModeLabels[themeMode]}`}>
+                  <IconButton size="small" onClick={(e) => setThemeMenuAnchor(e.currentTarget)} sx={{ color: 'text.secondary' }}>
+                    {(() => { const Icon = themeModeIcons[themeMode]; return <Icon fontSize="small" /> })()}
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={themeMenuAnchor}
+                  open={Boolean(themeMenuAnchor)}
+                  onClose={() => setThemeMenuAnchor(null)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                  {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => {
+                    const Icon = themeModeIcons[m]
+                    return (
+                      <MenuItem key={m} selected={themeMode === m} onClick={() => { setThemeMode(m); setThemeMenuAnchor(null) }} sx={{ gap: 1.5, minWidth: 130 }}>
+                        <Icon fontSize="small" sx={{ color: 'text.secondary' }} />
+                        {themeModeLabels[m]}
+                      </MenuItem>
+                    )
+                  })}
+                </Menu>
+
+                <ClaudeUsageDonut usage={claudeUsage} />
+
+                <Tooltip title="Settings">
+                  <IconButton
+                    size="small"
+                    onClick={() => navigate(location.pathname === '/settings' ? '/pipeline' : '/settings')}
+                    sx={{ color: location.pathname === '/settings' ? 'primary.main' : 'text.secondary' }}
+                  >
+                    <Settings fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </Stack>
         </Stack>
 
@@ -814,13 +842,15 @@ export function PipelinePage() {
       </Box>
 
       {/* ── Pipeline table ──────────────────────────────────────────────── */}
-      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 2, pt: 1.5, gap: 1.5 }}>
+      <Box sx={{ flex: { xs: 'none', sm: 1 }, overflow: { xs: 'visible', sm: 'hidden' }, display: 'flex', flexDirection: 'column', p: 2, pt: 1.5, gap: 1.5 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, px: 0.5 }}>Pipeline</Typography>
 
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: { xs: 'visible', sm: 'hidden' }, flex: { xs: 'none', sm: 1 }, display: 'flex', flexDirection: 'column' }}>
           <Tabs
             value={tab}
             onChange={(_, v) => { setTab(v); setSearch('') }}
+            variant={isMobile ? 'scrollable' : 'standard'}
+            scrollButtons={isMobile ? 'auto' : false}
             sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 2, minHeight: 44 }}
           >
             {TABS.map((t, i) => {
@@ -914,8 +944,9 @@ export function PipelinePage() {
             </Box>
           )}
 
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <Box sx={{ flex: { xs: 'none', sm: 1 }, minHeight: { xs: 'unset', sm: 0 }, overflow: { xs: 'visible', sm: 'hidden' } }}>
             <DataGrid
+              autoHeight={isMobile}
               rows={filteredJobs}
               columns={columns}
               loading={loading}
