@@ -10,6 +10,7 @@ import { api } from '../api.js'
 import { ChipArrayInput } from './ChipArrayInput.js'
 import { SectionHeader } from './SectionHeader.js'
 import { SaveBar } from './SaveBar.js'
+import { useAutoSave } from '../hooks/useAutoSave.js'
 
 interface Archetype { name: string; level: string; fit: string }
 interface ProofPoint { name: string; url: string; hero_metric: string }
@@ -17,7 +18,6 @@ interface ArchetypeKeywords { [slug: string]: string[] }
 
 interface Candidate {
   full_name: string; email: string; phone: string; location: string; linkedin: string; portfolio_url: string; github: string
-  // Application defaults (optional) — used by Auto Fill for screening/demographic questions.
   gender: string; pronouns: string; race_ethnicity: string; veteran_status: string; disability_status: string
   work_authorization: string; requires_sponsorship: string
   current_company: string; years_of_experience: string; how_did_you_hear: string
@@ -66,15 +66,19 @@ const FIT_OPTIONS = ['primary', 'secondary', 'adjacent']
 
 export function ProfileForm() {
   const [profile, setProfile] = useState<Profile>(EMPTY)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
+  const save = async () => { await api.settings.saveProfile(profile) }
+  const { saving, saved, error, setBaseline } = useAutoSave(profile, save)
 
   useEffect(() => {
     api.settings.profile().then(v => {
-      if (v) setProfile(deepMerge(EMPTY, v as Partial<Profile>))
+      if (v) {
+        const loaded = deepMerge(EMPTY, v as Partial<Profile>)
+        setProfile(loaded)
+        setBaseline(loaded)
+      }
     }).catch(() => null)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof Profile>(section: K, value: Profile[K]) =>
     setProfile(p => ({ ...p, [section]: value }))
@@ -90,15 +94,6 @@ export function ProfileForm() {
 
   const setLocation = (field: keyof Profile['location'], value: string) =>
     set('location', { ...profile.location, [field]: value })
-
-  const save = async () => {
-    setSaving(true); setError(null)
-    try {
-      await api.settings.saveProfile(profile)
-      setSaved(true); setTimeout(() => setSaved(false), 2500)
-    } catch (e) { setError(String(e)) }
-    finally { setSaving(false) }
-  }
 
   return (
     <Stack spacing={4} sx={{ maxWidth: 780 }}>
@@ -300,7 +295,7 @@ export function ProfileForm() {
         </Stack>
       </Stack>
 
-      <SaveBar onSave={save} saving={saving} saved={saved} error={error} />
+      <SaveBar saving={saving} saved={saved} error={error} />
     </Stack>
   )
 }
@@ -321,7 +316,6 @@ function FreeDropdown({ label, value, onChange, options }: {
   )
 }
 
-// Simple deep merge for filling defaults
 function deepMerge<T>(target: T, source: Partial<T>): T {
   const result = { ...target } as Record<string, unknown>
   for (const key in source) {

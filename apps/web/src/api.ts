@@ -117,6 +117,16 @@ export const api = {
     saveFilters: (data: unknown) => req<{ ok: boolean }>('/settings/filters', { method: 'PUT', body: JSON.stringify(data) }),
     cv: () => req<{ content: string | null }>('/settings/cv'),
     saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
+    uploadResume: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return fetch(`${BASE}/settings/cv/upload`, { method: 'POST', body: form })
+        .then(async res => {
+          const json = await res.json()
+          if (!res.ok) throw new Error((json as { error?: string }).error ?? `Upload failed: ${res.status}`)
+          return json as { ok: boolean; cv: unknown }
+        })
+    },
     fieldMappings: () => req<unknown[]>('/settings/field-mappings'),
     updateMapping: (id: number, answer: string) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'PATCH', body: JSON.stringify({ answer }), headers: { 'Content-Type': 'application/json' } }),
     deleteMapping: (id: number) => req<{ ok: boolean }>(`/settings/field-mappings/${id}`, { method: 'DELETE' }),

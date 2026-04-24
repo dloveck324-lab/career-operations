@@ -11,6 +11,7 @@ import { portalsRoutes } from './routes/portals.js'
 import { assistantRoutes } from './routes/assistant.js'
 import { authRoutes } from './routes/auth.js'
 import { adminRoutes } from './routes/admin.js'
+import { cvUploadRoutes } from './routes/cv-upload.js'
 import { configExists, loadProfile } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
 import { getTokenUsage, seedFieldMappingsFromProfile } from './db/queries.js'
@@ -61,6 +62,7 @@ await app.register(settingsRoutes, { prefix: '/api' })
 await app.register(applyRoutes, { prefix: '/api' })
 await app.register(portalsRoutes, { prefix: '/api' })
 await app.register(assistantRoutes, { prefix: '/api' })
+await app.register(cvUploadRoutes, { prefix: '/api' })
 
 app.get('/api/health', async () => {
   const cfg = configExists()

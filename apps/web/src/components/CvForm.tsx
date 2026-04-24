@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
-  Stack, TextField, Typography, IconButton, Button, Box, Paper, Divider,
+  Stack, TextField, Typography, IconButton, Button, Box, Paper, Divider, CircularProgress, Alert,
 } from '@mui/material'
-import { Add, Delete } from '@mui/icons-material'
+import { Add, Delete, UploadFile } from '@mui/icons-material'
 import { api } from '../api.js'
 import { SectionHeader } from './SectionHeader.js'
 import { SaveBar } from './SaveBar.js'
-
-// ── Data model ────────────────────────────────────────────────────────────────
+import { useAutoSave } from '../hooks/useAutoSave.js'
 
 interface CvContact {
   name: string; location: string; phone: string
@@ -38,8 +37,6 @@ const EMPTY: CvData = {
   education: [],
 }
 
-// ── Parser ────────────────────────────────────────────────────────────────────
-
 function parseCv(markdown: string): CvData {
   if (!markdown.trim()) return EMPTY
   const lines = markdown.split('\n')
@@ -53,11 +50,9 @@ function parseCv(markdown: string): CvData {
     education: [],
   }
 
-  // h1 name
   while (i < lines.length && !lines[i].startsWith('# ')) i++
   if (i < lines.length) { data.contact.name = lines[i].slice(2).trim(); i++ }
 
-  // contact line (has | but isn't a table row or divider)
   while (i < lines.length && !(lines[i].includes('|') && !lines[i].trim().startsWith('---'))) i++
   if (i < lines.length && lines[i].includes('|')) {
     const parts = lines[i].split('|').map(p => p.trim())
@@ -90,7 +85,6 @@ function parseCv(markdown: string): CvData {
           const role = parts[0] ?? ''
           const company = parts[1] ?? ''
           const period = parts[2] ?? ''
-          // Split period into start/end on em-dash or en-dash
           const dash = period.includes(' – ') ? ' – ' : period.includes(' - ') ? ' - ' : null
           const startDate = dash ? period.split(dash)[0].trim() : period
           const endDate = dash ? period.split(dash)[1]?.trim() ?? '' : ''
@@ -152,8 +146,6 @@ function parseCv(markdown: string): CvData {
   return data
 }
 
-// ── Serializer ────────────────────────────────────────────────────────────────
-
 function serializeCv(data: CvData): string {
   const push = (...args: string[]) => lines.push(...args)
   const lines: string[] = []
@@ -192,17 +184,41 @@ function serializeCv(data: CvData): string {
   return lines.join('\n')
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function CvForm() {
   const [cv, setCv] = useState<CvData>(EMPTY)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const save = async () => { await api.settings.saveCv(serializeCv(cv)) }
+  const { saving, saved, error, setBaseline } = useAutoSave(cv, save)
 
   useEffect(() => {
-    api.settings.cv().then(r => setCv(parseCv(r.content ?? ''))).catch(() => null)
-  }, [])
+    api.settings.cv().then(r => {
+      const loaded = parseCv(r.content ?? '')
+      setCv(loaded)
+      setBaseline(loaded)
+    }).catch(() => null)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true)
+    setUploadError(null)
+    setUploadSuccess(false)
+    try {
+      const result = await api.settings.uploadResume(file)
+      const parsed = result.cv as CvData
+      setCv(parsed)
+      setUploadSuccess(true)
+      setTimeout(() => setUploadSuccess(false), 4000)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const setContact = (field: keyof CvContact, value: string) =>
     setCv(c => ({ ...c, contact: { ...c.contact, [field]: value } }))
@@ -243,17 +259,77 @@ export function CvForm() {
   const removeEdu = (i: number) =>
     setCv(c => ({ ...c, education: c.education.filter((_, j) => j !== i) }))
 
-  const save = async () => {
-    setSaving(true); setError(null)
-    try {
-      await api.settings.saveCv(serializeCv(cv))
-      setSaved(true); setTimeout(() => setSaved(false), 2500)
-    } catch (e) { setError(String(e)) }
-    finally { setSaving(false) }
-  }
-
   return (
     <Stack spacing={4} sx={{ maxWidth: 820 }}>
+
+      {/* ── Resume Upload ── */}
+      <Paper
+        variant="outlined"
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => {
+          e.preventDefault()
+          const file = e.dataTransfer.files[0]
+          if (file) void handleFileUpload(file)
+        }}
+        sx={{
+          p: 2.5,
+          borderStyle: 'dashed',
+          borderColor: 'divider',
+          borderRadius: 2,
+          textAlign: 'center',
+          transition: 'border-color 0.15s',
+          '&:hover': { borderColor: 'primary.main' },
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.md"
+          style={{ display: 'none' }}
+          onChange={e => {
+            const file = e.target.files?.[0]
+            if (file) void handleFileUpload(file)
+          }}
+        />
+        <Stack spacing={1} alignItems="center">
+          {uploading ? (
+            <>
+              <CircularProgress size={28} />
+              <Typography variant="body2" color="text.secondary">
+                Parsing resume with Claude…
+              </Typography>
+            </>
+          ) : (
+            <>
+              <UploadFile sx={{ fontSize: 32, color: 'text.secondary' }} />
+              <Typography variant="body2" fontWeight={600}>
+                Import from resume
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Drop a PDF or text file here, or click to browse. Claude will extract and fill the form below.
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ mt: 0.5 }}
+              >
+                Choose file
+              </Button>
+            </>
+          )}
+        </Stack>
+        {uploadSuccess && (
+          <Alert severity="success" sx={{ mt: 1.5, textAlign: 'left' }}>
+            Resume parsed successfully — review the fields below and save when ready.
+          </Alert>
+        )}
+        {uploadError && (
+          <Alert severity="error" sx={{ mt: 1.5, textAlign: 'left' }}>
+            {uploadError}
+          </Alert>
+        )}
+      </Paper>
 
       {/* ── Contact ── */}
       <Stack spacing={2}>
@@ -399,7 +475,7 @@ export function CvForm() {
       </Stack>
 
       <Divider />
-      <SaveBar onSave={save} saving={saving} saved={saved} error={error} />
+      <SaveBar saving={saving} saved={saved} error={error} />
     </Stack>
   )
 }

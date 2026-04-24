@@ -8,8 +8,7 @@ import { api } from '../api.js'
 import { ChipArrayInput } from './ChipArrayInput.js'
 import { SectionHeader } from './SectionHeader.js'
 import { SaveBar } from './SaveBar.js'
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { useAutoSave } from '../hooks/useAutoSave.js'
 
 interface TitleFilter { positive: string[]; negative: string[] }
 
@@ -25,7 +24,7 @@ interface Prescreen {
   seniority_min: string
   comp_floor: number
   location_policy: LocationPolicy
-  blocklist_titles: string[]   // kept for backward compat in profile.yml; UI writes to title_filter.negative
+  blocklist_titles: string[]
   archetype_keywords: Record<string, string[]>
 }
 
@@ -37,8 +36,6 @@ interface FiltersFile {
   title_filter?: TitleFilter
   location_blocklist?: string[]
 }
-
-// ── Defaults ──────────────────────────────────────────────────────────────────
 
 const EMPTY_PRESCREEN: Prescreen = {
   seniority_min: 'Senior',
@@ -56,81 +53,78 @@ const EMPTY_PRESCREEN: Prescreen = {
 
 const SENIORITY_OPTIONS = ['', 'Junior', 'Mid', 'Senior', 'Staff', 'Principal', 'Director', 'Head', 'VP']
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function ScanFiltersForm() {
-  // filters.yml state
   const [titlePositive, setTitlePositive] = useState<string[]>([])
   const [titleNegative, setTitleNegative] = useState<string[]>([])
   const [locationBlocklist, setLocationBlocklist] = useState<string[]>([])
   const [filtersRaw, setFiltersRaw] = useState<FiltersFile>({})
 
-  // profile.yml prescreen state
   const [prescreen, setPrescreen] = useState<Prescreen>(EMPTY_PRESCREEN)
   const [fullProfile, setFullProfile] = useState<Profile | null>(null)
 
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [newArchSlug, setNewArchSlug] = useState('')
+
+  const formData = { titlePositive, titleNegative, locationBlocklist, prescreen }
+
+  const save = async () => {
+    await Promise.all([
+      api.settings.saveFilters({
+        ...filtersRaw,
+        title_filter: { positive: titlePositive, negative: titleNegative },
+        location_blocklist: locationBlocklist,
+      }),
+      api.settings.saveProfile({
+        ...(fullProfile ?? {}),
+        prescreen: { ...prescreen, blocklist_titles: [] },
+      }),
+    ])
+  }
+
+  const { saving, saved, error, setBaseline } = useAutoSave(formData, save)
 
   useEffect(() => {
     Promise.all([
       api.settings.filters().catch(() => null),
       api.settings.profile().catch(() => null),
     ]).then(([filtersData, profileData]) => {
-      if (filtersData) {
-        const f = filtersData as FiltersFile
-        setFiltersRaw(f)
-        setTitlePositive(f.title_filter?.positive ?? [])
-        // Merge profile.blocklist_titles into the negative list on load so the user sees everything unified
-        const profileBlocklist = (profileData as Profile | null)?.prescreen?.blocklist_titles ?? []
-        const combined = [...new Set([...(f.title_filter?.negative ?? []), ...profileBlocklist])]
-        setTitleNegative(combined)
-        setLocationBlocklist(f.location_blocklist ?? [])
-      }
+      const f = (filtersData ?? {}) as FiltersFile
+      const profileBlocklist = (profileData as Profile | null)?.prescreen?.blocklist_titles ?? []
+      const tp = f.title_filter?.positive ?? []
+      const tn = [...new Set([...(f.title_filter?.negative ?? []), ...profileBlocklist])]
+      const lb = f.location_blocklist ?? []
+
+      setFiltersRaw(f)
+      setTitlePositive(tp)
+      setTitleNegative(tn)
+      setLocationBlocklist(lb)
+
+      let ps = EMPTY_PRESCREEN
       if (profileData) {
         const p = profileData as Profile
         setFullProfile(p)
-        const ps = p.prescreen as Partial<Prescreen> | undefined
-        setPrescreen({
-          seniority_min: ps?.seniority_min ?? EMPTY_PRESCREEN.seniority_min,
-          comp_floor: ps?.comp_floor ?? 0,
+        const raw = p.prescreen as Partial<Prescreen> | undefined
+        ps = {
+          seniority_min: raw?.seniority_min ?? EMPTY_PRESCREEN.seniority_min,
+          comp_floor: raw?.comp_floor ?? 0,
           location_policy: {
-            allow_onsite_cities: ps?.location_policy?.allow_onsite_cities ?? [],
-            allowed_countries: ps?.location_policy?.allowed_countries ?? [],
-            require_remote_if_elsewhere: ps?.location_policy?.require_remote_if_elsewhere ?? true,
-            require_us_or_remote: ps?.location_policy?.require_us_or_remote ?? true,
-            worldwide_remote_ok: ps?.location_policy?.worldwide_remote_ok !== false,
+            allow_onsite_cities: raw?.location_policy?.allow_onsite_cities ?? [],
+            allowed_countries: raw?.location_policy?.allowed_countries ?? [],
+            require_remote_if_elsewhere: raw?.location_policy?.require_remote_if_elsewhere ?? true,
+            require_us_or_remote: raw?.location_policy?.require_us_or_remote ?? true,
+            worldwide_remote_ok: raw?.location_policy?.worldwide_remote_ok !== false,
           },
-          blocklist_titles: [],   // cleared — unified into title_filter.negative
-          archetype_keywords: ps?.archetype_keywords ?? {},
-        })
+          blocklist_titles: [],
+          archetype_keywords: raw?.archetype_keywords ?? {},
+        }
+        setPrescreen(ps)
       }
+
+      setBaseline({ titlePositive: tp, titleNegative: tn, locationBlocklist: lb, prescreen: ps })
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setPolicy = (patch: Partial<LocationPolicy>) =>
     setPrescreen(p => ({ ...p, location_policy: { ...p.location_policy, ...patch } }))
-
-  const save = async () => {
-    setSaving(true); setError(null)
-    try {
-      await Promise.all([
-        api.settings.saveFilters({
-          ...filtersRaw,
-          title_filter: { positive: titlePositive, negative: titleNegative },
-          location_blocklist: locationBlocklist,
-        }),
-        api.settings.saveProfile({
-          ...(fullProfile ?? {}),
-          prescreen: { ...prescreen, blocklist_titles: [] },
-        }),
-      ])
-      setSaved(true); setTimeout(() => setSaved(false), 2500)
-    } catch (e) { setError(String(e)) }
-    finally { setSaving(false) }
-  }
 
   const addArchetypeSlug = () => {
     const slug = newArchSlug.trim().toLowerCase().replace(/\s+/g, '_')
@@ -147,7 +141,7 @@ export function ScanFiltersForm() {
   return (
     <Stack spacing={5} sx={{ maxWidth: 680 }}>
 
-      {/* ── Title ───────────────────────────────────────────────────────────── */}
+      {/* ── Title ── */}
       <Stack spacing={2}>
         <SectionHeader
           title="Title"
@@ -171,7 +165,7 @@ export function ScanFiltersForm() {
 
       <Divider />
 
-      {/* ── Location ────────────────────────────────────────────────────────── */}
+      {/* ── Location ── */}
       <Stack spacing={2}>
         <SectionHeader
           title="Location"
@@ -212,7 +206,7 @@ export function ScanFiltersForm() {
               <Box>
                 <Typography variant="body2">US-only + allowed-country remote</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Rejects non-US locations unless the country is in the list above. "Remote – Canada" passes if Canada is listed.
+                  Rejects non-US locations unless the country is in the list above.
                 </Typography>
               </Box>
             }
@@ -256,7 +250,7 @@ export function ScanFiltersForm() {
 
       <Divider />
 
-      {/* ── Seniority & Compensation ─────────────────────────────────────────── */}
+      {/* ── Seniority & Compensation ── */}
       <Stack spacing={2}>
         <SectionHeader
           title="Seniority & Compensation"
@@ -287,11 +281,11 @@ export function ScanFiltersForm() {
 
       <Divider />
 
-      {/* ── Archetypes ───────────────────────────────────────────────────────── */}
+      {/* ── Archetypes ── */}
       <Stack spacing={2}>
         <SectionHeader
           title="Archetypes"
-          description="Keyword map that pre-tags jobs before LLM evaluation. A job is tagged with the archetype whose keywords appear most in its title and description."
+          description="Keyword map that pre-tags jobs before LLM evaluation."
         />
         <Stack spacing={2}>
           {Object.entries(prescreen.archetype_keywords).map(([slug, kws]) => (
@@ -330,7 +324,7 @@ export function ScanFiltersForm() {
         </Stack>
       </Stack>
 
-      <SaveBar onSave={save} saving={saving} saved={saved} error={error} />
+      <SaveBar saving={saving} saved={saved} error={error} />
     </Stack>
   )
 }
