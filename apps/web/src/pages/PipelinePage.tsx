@@ -5,6 +5,7 @@ import {
   IconButton, ButtonGroup, Tooltip, Popover, ToggleButtonGroup,
   ToggleButton, Select, MenuItem, FormControl, InputLabel,
   Autocomplete, Divider, Menu, Snackbar, Alert,
+  useTheme, useMediaQuery,
 } from '@mui/material'
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
@@ -332,6 +333,8 @@ export function PipelinePage() {
   const location = useLocation()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
   const assistant = useAssistant()
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
 
   // Header state
   const [firstName, setFirstName] = useState('David')
@@ -652,8 +655,8 @@ export function PipelinePage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <Box sx={{ px: 3, pt: 3, pb: 0 }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+      <Box sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 3 }, pb: 0 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} alignItems="flex-start" justifyContent="space-between" spacing={{ xs: 1, sm: 2 }}>
           {/* Greeting */}
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h4" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
@@ -665,7 +668,7 @@ export function PipelinePage() {
           </Box>
 
           {/* Action buttons */}
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0, mt: 0.5 }}>
+          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" sx={{ flexShrink: 0 }}>
             {autoScanLabel && (
               <Chip label={autoScanLabel} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.65rem', fontWeight: 700, height: 24 }} />
             )}
@@ -927,6 +930,7 @@ export function PipelinePage() {
                 return ''
               }}
               initialState={{ sorting: { sortModel: [{ field: 'score', sort: 'desc' }] } }}
+              columnVisibilityModel={isMobile ? { archetype: false, location: false, scraped_at: false, evaluated_at: false } : {}}
               sx={{
                 border: 'none',
                 '& .MuiDataGrid-row': { cursor: 'pointer' },

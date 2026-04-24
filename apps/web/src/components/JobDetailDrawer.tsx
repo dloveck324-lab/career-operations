@@ -106,7 +106,7 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   }
 
   return (
-    <Drawer anchor="right" open={!!job} onClose={onClose} PaperProps={{ sx: { width: 520, bgcolor: 'background.paper' } }}>
+    <Drawer anchor="right" open={!!job} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 520 }, bgcolor: 'background.paper' } }}>
       {job && (
         <Box sx={{ p: 3, height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
