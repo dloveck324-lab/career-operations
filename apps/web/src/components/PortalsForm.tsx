@@ -85,7 +85,7 @@ export function PortalsForm() {
       if (!v) return
       const f = v as FiltersFile
       setRows((f.portals ?? []).map(p => ({ ...p, id: idRef.current++ })))
-      const rss = (f.job_boards ?? []).find((b: { type: string }) => b.type === 'indeed_rss') as { enabled?: boolean } | undefined
+      const rss = ((f.job_boards ?? []) as Array<{ type: string; enabled?: boolean }>).find(b => b.type === 'indeed_rss')
       setIndeedEnabled(rss?.enabled ?? true)
     }).catch(() => null)
   }, [])
