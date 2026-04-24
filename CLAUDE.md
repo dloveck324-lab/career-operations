@@ -1,5 +1,21 @@
 # Job Pipeline — Agent Instructions
 
+## Branch Targeting — Required Process
+
+Before implementing ANY code change, Claude MUST ask:
+
+> "Should this change go to **career-ops-dave** only, **demo-mode** only, or **both**?"
+
+Rules:
+- **Both** — UI/UX changes, new features, bug fixes that affect all users
+- **career-ops-dave only** — auth, Render/deployment config, personal data handling
+- **demo-mode only** — demo seed data, waitlist, public-facing copy
+
+After the user answers, apply changes to the target branch(es) and commit to each separately.
+Never apply a change to a branch without explicit confirmation from this check.
+
+---
+
 ## Project Summary
 
 A local-first web dashboard for managing a job search pipeline. React+MUI frontend, Fastify+SQLite backend. Claude CLI drives job evaluation and form autofill. PinchTab controls the browser.
