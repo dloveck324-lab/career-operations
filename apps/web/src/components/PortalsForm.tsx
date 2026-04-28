@@ -3,9 +3,10 @@ import {
   Stack, Select, MenuItem, Switch,
   IconButton, Button, Typography, Box, Chip,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  CircularProgress, Alert,
+  CircularProgress, Alert, TextField, ToggleButton, ToggleButtonGroup,
+  useTheme, useMediaQuery,
 } from '@mui/material'
-import { Add, Delete, OpenInNew, TravelExplore } from '@mui/icons-material'
+import { Add, Delete, OpenInNew, TravelExplore, FileUpload } from '@mui/icons-material'
 import {
   DataGrid, type GridColDef, type GridRenderEditCellParams, useGridApiContext,
   type GridRowSelectionModel,
@@ -80,6 +81,16 @@ export function PortalsForm() {
   const [discoverError, setDiscoverError] = useState<string | null>(null)
   const [selection, setSelection] = useState<GridRowSelectionModel>([])
 
+  // Bulk import (paste YAML or JSON of portal entries)
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importFormat, setImportFormat] = useState<'yaml' | 'json'>('yaml')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<{ added: number; skipped: number; invalid: number; addedNames: string[] } | null>(null)
+
   useEffect(() => {
     api.settings.filters().then(v => {
       if (!v) return
@@ -115,6 +126,39 @@ export function PortalsForm() {
 
   const add = () => setRows(rs => [...rs, { ...EMPTY, id: idRef.current++ }])
   const remove = (id: number) => setRows(rs => rs.filter(r => r.id !== id))
+
+  const submitImport = async () => {
+    setImporting(true)
+    setImportError(null)
+    setImportResult(null)
+    try {
+      const res = await api.settings.importPortals(importText, importFormat)
+      setImportResult({
+        added: res.added,
+        skipped: res.skipped,
+        invalid: res.invalid,
+        addedNames: res.detail.added,
+      })
+      // Reload from server so the grid reflects the new entries
+      const v = await api.settings.filters()
+      if (v) {
+        const f = v as FiltersFile
+        const portals = (f.portals ?? []).map(p => ({ ...p, id: idRef.current++ }))
+        setRows(portals)
+      }
+    } catch (err) {
+      setImportError(String((err as Error).message ?? err))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const closeImport = () => {
+    setImportOpen(false)
+    setImportText('')
+    setImportError(null)
+    setImportResult(null)
+  }
 
   const openDiscover = async () => {
     setDiscoverOpen(true)
@@ -250,6 +294,9 @@ export function PortalsForm() {
             variant="outlined" sx={{ fontSize: '0.7rem' }} />
         ))}
         <Box sx={{ flex: 1 }} />
+        <Button size="small" variant="outlined" startIcon={<FileUpload />} onClick={() => setImportOpen(true)}>
+          Import
+        </Button>
         <Button size="small" variant="outlined" startIcon={<TravelExplore />} onClick={openDiscover}>
           Scan for portals
         </Button>
@@ -378,6 +425,69 @@ export function PortalsForm() {
             onClick={importSelected}
           >
             Import {(selection as string[]).length > 0 ? `${(selection as string[]).length} portals` : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk import dialog — paste YAML or JSON, server validates + dedupes */}
+      <Dialog
+        open={importOpen}
+        onClose={closeImport}
+        fullScreen={isMobile}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Import portals</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Paste a YAML or JSON list of portal entries. Each entry needs <code>name</code>, <code>type</code>,
+              and (for non-custom types) <code>company_id</code>. Existing entries with the same
+              type+company_id are skipped.
+            </Typography>
+            <ToggleButtonGroup
+              value={importFormat}
+              exclusive
+              size="small"
+              onChange={(_, v) => v && setImportFormat(v)}
+            >
+              <ToggleButton value="yaml">YAML</ToggleButton>
+              <ToggleButton value="json">JSON</ToggleButton>
+            </ToggleButtonGroup>
+            <TextField
+              multiline
+              minRows={10}
+              maxRows={20}
+              fullWidth
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={importFormat === 'yaml'
+                ? `- name: Acme Health\n  type: greenhouse\n  company_id: acmehealth\n  url: https://job-boards.greenhouse.io/acmehealth\n  notes: ''\n  enabled: true`
+                : `[{"name": "Acme Health", "type": "greenhouse", "company_id": "acmehealth", "url": "https://job-boards.greenhouse.io/acmehealth", "notes": "", "enabled": true}]`}
+              sx={{ '& textarea': { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+            />
+            {importError && <Alert severity="error">{importError}</Alert>}
+            {importResult && (
+              <Alert severity={importResult.added > 0 ? 'success' : 'info'}>
+                Added {importResult.added} · skipped {importResult.skipped} (duplicates) · invalid {importResult.invalid}
+                {importResult.addedNames.length > 0 && (
+                  <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
+                    Added: {importResult.addedNames.slice(0, 8).join(', ')}{importResult.addedNames.length > 8 ? `, +${importResult.addedNames.length - 8} more` : ''}
+                  </Typography>
+                )}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeImport}>{importResult ? 'Close' : 'Cancel'}</Button>
+          <Button
+            variant="contained"
+            disabled={importing || !importText.trim()}
+            onClick={submitImport}
+            startIcon={importing ? <CircularProgress size={16} /> : <FileUpload />}
+          >
+            {importing ? 'Importing…' : 'Import'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -299,6 +299,79 @@ export async function settingsRoutes(app: FastifyInstance) {
     return { ok: true }
   })
 
+  /**
+   * Bulk-import portal entries. Body: { text: string, format?: 'yaml' | 'json' }.
+   * Accepts either a `portals: [...]` doc or a bare array. Each entry must have
+   * { name, type, company_id }. Dedupes against existing entries by (type, company_id).
+   * Appends to filters.yml in place; returns counts.
+   */
+  app.post('/settings/portals/import', async (req) => {
+    const body = req.body as { text?: string; format?: 'yaml' | 'json' }
+    if (!body?.text?.trim()) throw app.httpErrors.badRequest('text is required')
+
+    let parsed: unknown
+    try {
+      parsed = body.format === 'json' ? JSON.parse(body.text) : yaml.load(body.text)
+    } catch (err) {
+      throw app.httpErrors.badRequest(`Parse error: ${(err as Error).message}`)
+    }
+
+    const incoming: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { portals?: unknown[] })?.portals)
+        ? (parsed as { portals: unknown[] }).portals
+        : []
+    if (incoming.length === 0) throw app.httpErrors.badRequest('No portal entries found in input')
+
+    const VALID_TYPES = new Set(['greenhouse', 'ashby', 'lever', 'workday', 'custom'])
+    const valid: Array<Record<string, unknown>> = []
+    const invalid: Array<{ entry: unknown; reason: string }> = []
+    for (const e of incoming) {
+      if (!e || typeof e !== 'object') { invalid.push({ entry: e, reason: 'not an object' }); continue }
+      const r = e as Record<string, unknown>
+      if (typeof r.name !== 'string' || !r.name.trim()) { invalid.push({ entry: e, reason: 'missing name' }); continue }
+      if (typeof r.type !== 'string' || !VALID_TYPES.has(r.type)) { invalid.push({ entry: e, reason: `invalid type (must be one of ${[...VALID_TYPES].join(', ')})` }); continue }
+      if (r.type !== 'custom' && (typeof r.company_id !== 'string' || !r.company_id.trim())) {
+        invalid.push({ entry: e, reason: 'company_id required for non-custom portals' }); continue
+      }
+      valid.push({
+        name: r.name,
+        type: r.type,
+        company_id: r.company_id ?? '',
+        url: typeof r.url === 'string' ? r.url : '',
+        notes: typeof r.notes === 'string' ? r.notes : '',
+        enabled: r.enabled !== false,
+      })
+    }
+
+    const path = configPath('filters.yml')
+    const existing = existsSync(path)
+      ? (yaml.load(readFileSync(path, 'utf-8')) as { portals?: Record<string, unknown>[] } | null) ?? {}
+      : {}
+    const portals = existing.portals ?? []
+    const existingKeys = new Set(portals.map(p => `${p.type as string}:${(p.company_id as string) ?? ''}`))
+
+    const added: Record<string, unknown>[] = []
+    const skipped: Array<{ name: string; reason: string }> = []
+    for (const v of valid) {
+      const k = `${v.type}:${v.company_id ?? ''}`
+      if (existingKeys.has(k)) { skipped.push({ name: v.name as string, reason: 'duplicate (type+company_id already exists)' }); continue }
+      existingKeys.add(k)
+      portals.push(v)
+      added.push(v)
+    }
+
+    const merged = { ...existing, portals }
+    writeFileSync(path, yaml.dump(merged, { lineWidth: 120 }))
+
+    return {
+      added: added.length,
+      skipped: skipped.length,
+      invalid: invalid.length,
+      detail: { added: added.map(a => a.name), skipped, invalid },
+    }
+  })
+
   app.get('/settings/cv', async () => {
     const path = configPath('cv.md')
     if (!existsSync(path)) return { content: null }

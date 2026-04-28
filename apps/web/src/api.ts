@@ -121,6 +121,21 @@ export const api = {
     saveProfile: (data: unknown) => req<{ ok: boolean }>('/settings/profile', { method: 'PUT', body: JSON.stringify(data) }),
     filters: () => req<unknown>('/settings/filters'),
     saveFilters: (data: unknown) => req<{ ok: boolean }>('/settings/filters', { method: 'PUT', body: JSON.stringify(data) }),
+    importPortals: (text: string, format: 'yaml' | 'json' = 'yaml') =>
+      req<{
+        added: number
+        skipped: number
+        invalid: number
+        detail: {
+          added: string[]
+          skipped: Array<{ name: string; reason: string }>
+          invalid: Array<{ entry: unknown; reason: string }>
+        }
+      }>('/settings/portals/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, format }),
+      }),
     cv: () => req<{ content: string | null }>('/settings/cv'),
     saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
     uploadResume: (file: File) => {
