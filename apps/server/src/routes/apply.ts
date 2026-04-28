@@ -150,10 +150,14 @@ export async function applyRoutes(app: FastifyInstance) {
     const run = runRegistry.get(runId)
     if (!run) throw app.httpErrors.notFound('Run not found')
 
+    const job = getJob(run.jobId)
+    const variant: 'healthcare' | 'generic' =
+      job?.industry_vertical === 'healthcare' ? 'healthcare' : 'generic'
+
     let saved = 0
     let skipped = 0
     for (const item of body.items) {
-      if (saveFieldMappingIfMissing(item.question, item.answer, 'autofill')) saved++
+      if (saveFieldMappingIfMissing(item.question, item.answer, variant, 'autofill')) saved++
       else skipped++
     }
     return { saved, skipped }

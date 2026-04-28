@@ -1,5 +1,5 @@
 import { PinchTabClient } from './pinchtab.js'
-import { loadProfile, loadCv, type CandidateProfile } from '@job-pipeline/core'
+import { loadProfile, loadProfileVariant, loadCv, type CandidateProfile } from '@job-pipeline/core'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
@@ -148,15 +148,17 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     return
   }
 
-  const profile = loadProfile()
-  const cv = loadCv()
+  const variant: 'healthcare' | 'generic' =
+    job.industry_vertical === 'healthcare' ? 'healthcare' : 'generic'
+  const profile = loadProfileVariant(variant) ?? loadProfile()
+  const cv = loadCv(variant)
   if (!profile) {
     runRegistry.publish(run.id, 'error', { message: 'No candidate profile loaded (config/profile.yml)' })
     runRegistry.setStatus(run.id, 'failed')
     return
   }
 
-  const mappings = getAllFieldMappings()
+  const mappings = getAllFieldMappings(variant)
   const ats = detectAts(job.url)
   const prompt = buildAgentPrompt(job, profile, cv, tabId, mappings, ats)
   runRegistry.publish(run.id, 'prompt', { text: prompt, model: MODEL_IDS[run.model], ats })

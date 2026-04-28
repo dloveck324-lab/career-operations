@@ -156,7 +156,8 @@ function importFieldMappings(raw: Record<string, unknown>): number {
       const question = field.question ?? field.label
       const answer = field.answer ?? field.value
       if (question && answer) {
-        saveFieldMapping(question, String(answer), atsType)
+        // Legacy import: assume single-profile world → seed under 'generic'.
+        saveFieldMapping(question, String(answer), 'generic', atsType)
         count++
       }
     }

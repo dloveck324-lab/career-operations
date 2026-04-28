@@ -96,14 +96,44 @@ export function runMigrations(db: DatabaseType): void {
     db.exec(`ALTER TABLE evaluations ADD COLUMN profile_variant TEXT NOT NULL DEFAULT 'generic'`)
   }
 
-  // Step 3 only adds the column. The UNIQUE(question_hash) → UNIQUE(question_hash,
-  // profile_variant) constraint change is deferred to Step 5, which will pair
-  // the table rebuild with the query updates that depend on it. Keeping the
-  // existing constraint here keeps Step 3 non-breaking for current callers.
+  // Step 3: add profile_variant column to field_mappings (idempotent).
   if (!hasColumn('field_mappings', 'profile_variant')) {
     db.exec(`ALTER TABLE field_mappings ADD COLUMN profile_variant TEXT NOT NULL DEFAULT 'generic'`)
   }
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_field_mappings_variant ON field_mappings(profile_variant)`)
+
+  // Step 5: partition the UNIQUE constraint on (question_hash, profile_variant).
+  // SQLite can't drop a column-level UNIQUE in place, so rebuild the table.
+  // Detection: the new constraint pattern in sqlite_master.sql is unique to
+  // the post-Step-5 schema, so its absence means we still need to migrate.
+  const fmSql = (db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='field_mappings'`)
+    .get() as { sql?: string } | undefined)?.sql ?? ''
+  if (!fmSql.includes('UNIQUE(question_hash, profile_variant)')) {
+    db.exec(`
+      BEGIN TRANSACTION;
+      CREATE TABLE field_mappings_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        question_hash   TEXT NOT NULL,
+        question_text   TEXT NOT NULL,
+        answer          TEXT NOT NULL,
+        ats_type        TEXT,
+        confidence      REAL NOT NULL DEFAULT 1.0,
+        last_used_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        use_count       INTEGER NOT NULL DEFAULT 1,
+        profile_variant TEXT NOT NULL DEFAULT 'generic',
+        UNIQUE(question_hash, profile_variant)
+      );
+      INSERT INTO field_mappings_new
+        (id, question_hash, question_text, answer, ats_type, confidence, last_used_at, use_count, profile_variant)
+      SELECT id, question_hash, question_text, answer, ats_type, confidence, last_used_at, use_count, profile_variant
+      FROM field_mappings;
+      DROP TABLE field_mappings;
+      ALTER TABLE field_mappings_new RENAME TO field_mappings;
+      CREATE INDEX idx_field_mappings_hash ON field_mappings(question_hash);
+      CREATE INDEX idx_field_mappings_variant ON field_mappings(profile_variant);
+      COMMIT;
+    `)
+  }
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_industry ON jobs(industry_vertical)`)
 }

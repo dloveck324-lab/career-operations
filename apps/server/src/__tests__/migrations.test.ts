@@ -86,17 +86,43 @@ describe('runMigrations', () => {
     expect(fm.answer).toBe('Dave')
   })
 
-  it('field_mappings retains UNIQUE(question_hash) until Step 5', () => {
-    // Step 3 only adds the profile_variant column. Constraint change to
-    // UNIQUE(question_hash, profile_variant) is deferred to Step 5 so it
-    // can land with the query updates that depend on it.
+  it('field_mappings UNIQUE constraint partitions by (question_hash, profile_variant)', () => {
     const db = new Database(':memory:')
     runMigrations(db)
 
     const insert = db.prepare(
-      `INSERT INTO field_mappings (question_hash, question_text, answer) VALUES (?, ?, ?)`,
+      `INSERT INTO field_mappings (question_hash, question_text, answer, profile_variant) VALUES (?, ?, ?, ?)`,
     )
-    insert.run('h1', 'Q', 'first')
-    expect(() => insert.run('h1', 'Q', 'duplicate')).toThrow(/UNIQUE/)
+    insert.run('h1', 'Q', 'generic-answer', 'generic')
+    // Same hash, different variant — should succeed under partitioned UNIQUE.
+    expect(() => insert.run('h1', 'Q', 'healthcare-answer', 'healthcare')).not.toThrow()
+    // Same hash + same variant — should violate UNIQUE.
+    expect(() => insert.run('h1', 'Q', 'duplicate', 'generic')).toThrow(/UNIQUE/)
+  })
+
+  it('preserves data when migrating field_mappings to partitioned UNIQUE', () => {
+    const db = new Database(':memory:')
+    db.exec(`
+      CREATE TABLE field_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        question_hash TEXT NOT NULL UNIQUE,
+        question_text TEXT NOT NULL, answer TEXT NOT NULL,
+        ats_type TEXT, confidence REAL NOT NULL DEFAULT 1.0,
+        last_used_at TEXT NOT NULL DEFAULT (datetime('now')),
+        use_count INTEGER NOT NULL DEFAULT 1
+      );
+    `)
+    db.prepare(
+      `INSERT INTO field_mappings (question_hash, question_text, answer, ats_type, use_count) VALUES (?, ?, ?, ?, ?)`,
+    ).run('h-existing', 'Email', 'pre@example.com', 'profile', 7)
+
+    runMigrations(db)
+
+    const row = db
+      .prepare('SELECT answer, profile_variant, use_count FROM field_mappings WHERE question_hash = ?')
+      .get('h-existing') as { answer: string; profile_variant: string; use_count: number }
+    expect(row.answer).toBe('pre@example.com')
+    expect(row.profile_variant).toBe('generic')
+    expect(row.use_count).toBe(7)
   })
 })

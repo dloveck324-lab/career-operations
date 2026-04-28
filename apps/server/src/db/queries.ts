@@ -86,45 +86,77 @@ export function getJobStats(): Record<JobStatus, number> {
 }
 
 // ── Field Mappings ────────────────────────────────────────────────────────────
+//
+// Field mappings are partitioned by profile_variant (Partition A — Step 5 of
+// docs/DUAL_PROFILE_MIGRATION.md). Same question can have different answers
+// per variant; each variant has its own row. Default variant is 'generic' so
+// legacy callers keep working when they don't specify one.
 
-export function lookupFieldMapping(questionText: string): string | null {
+type FmVariant = 'healthcare' | 'generic'
+
+export function lookupFieldMapping(questionText: string, variant: FmVariant = 'generic'): string | null {
   const hash = hashText(questionText.toLowerCase().trim())
-  const row = db.prepare('SELECT answer FROM field_mappings WHERE question_hash = ?').get(hash) as { answer: string } | null
+  const row = db
+    .prepare('SELECT answer FROM field_mappings WHERE question_hash = ? AND profile_variant = ?')
+    .get(hash, variant) as { answer: string } | null
   if (row) {
-    db.prepare("UPDATE field_mappings SET last_used_at = datetime('now'), use_count = use_count + 1 WHERE question_hash = ?").run(hash)
+    db.prepare(
+      "UPDATE field_mappings SET last_used_at = datetime('now'), use_count = use_count + 1 WHERE question_hash = ? AND profile_variant = ?",
+    ).run(hash, variant)
     return row.answer
   }
   return null
 }
 
-export function saveFieldMapping(questionText: string, answer: string, atsType?: string) {
+export function saveFieldMapping(
+  questionText: string,
+  answer: string,
+  variant: FmVariant = 'generic',
+  atsType?: string,
+) {
   const hash = hashText(questionText.toLowerCase().trim())
   db.prepare(`
-    INSERT INTO field_mappings (question_hash, question_text, answer, ats_type)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(question_hash) DO UPDATE SET
+    INSERT INTO field_mappings (question_hash, question_text, answer, ats_type, profile_variant)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(question_hash, profile_variant) DO UPDATE SET
       answer = excluded.answer,
       ats_type = excluded.ats_type,
       last_used_at = datetime('now'),
       use_count = use_count + 1
-  `).run(hash, questionText, answer, atsType ?? null)
+  `).run(hash, questionText, answer, atsType ?? null, variant)
 }
 
 export function getFieldMappings() {
   return db.prepare('SELECT * FROM field_mappings ORDER BY use_count DESC').all()
 }
 
-export function saveFieldMappingIfMissing(questionText: string, answer: string, atsType?: string): boolean {
+export function saveFieldMappingIfMissing(
+  questionText: string,
+  answer: string,
+  variant: FmVariant = 'generic',
+  atsType?: string,
+): boolean {
   if (!answer) return false
   const hash = hashText(questionText.toLowerCase().trim())
   const result = db.prepare(`
-    INSERT OR IGNORE INTO field_mappings (question_hash, question_text, answer, ats_type)
-    VALUES (?, ?, ?, ?)
-  `).run(hash, questionText, answer, atsType ?? null)
+    INSERT OR IGNORE INTO field_mappings (question_hash, question_text, answer, ats_type, profile_variant)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(hash, questionText, answer, atsType ?? null, variant)
   return result.changes > 0
 }
 
-export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
+export function seedFieldMappingsFromProfile(profile: ProfileConfig, variant?: FmVariant): number {
+  if (!variant) {
+    // No variant specified → seed both partitions from the same top-level
+    // candidate fields. Per Partition A, identical answers are duplicated
+    // across variants by design.
+    return seedFieldMappingsFromProfile(profile, 'generic')
+      + seedFieldMappingsFromProfile(profile, 'healthcare')
+  }
+  return seedFieldMappingsFromProfileVariant(profile, variant)
+}
+
+function seedFieldMappingsFromProfileVariant(profile: ProfileConfig, variant: FmVariant): number {
   const p = profile.candidate as ProfileConfig['candidate'] & {
     gender?: string
     pronouns?: string
@@ -247,14 +279,23 @@ export function seedFieldMappingsFromProfile(profile: ProfileConfig): number {
 
   let seeded = 0
   for (const [question, answer] of mappings) {
-    if (saveFieldMappingIfMissing(question, answer, 'profile')) seeded++
+    if (saveFieldMappingIfMissing(question, answer, variant, 'profile')) seeded++
   }
   return seeded
 }
 
-/** Return all stored mappings as a plain object — useful for injecting into agent prompts. */
-export function getAllFieldMappings(): Array<{ question: string; answer: string }> {
-  const rows = db.prepare('SELECT question_text AS question, answer FROM field_mappings ORDER BY use_count DESC').all()
+/**
+ * Return stored mappings as a flat list — useful for injecting into agent prompts.
+ * Filters by variant when provided so autofill only sees the active profile's answers.
+ * Variant omitted = legacy mode (returns all rows; only meaningful while a single
+ * variant is in use).
+ */
+export function getAllFieldMappings(variant?: FmVariant): Array<{ question: string; answer: string }> {
+  const rows = variant
+    ? db
+        .prepare('SELECT question_text AS question, answer FROM field_mappings WHERE profile_variant = ? ORDER BY use_count DESC')
+        .all(variant)
+    : db.prepare('SELECT question_text AS question, answer FROM field_mappings ORDER BY use_count DESC').all()
   return rows as Array<{ question: string; answer: string }>
 }
 

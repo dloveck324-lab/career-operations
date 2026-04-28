@@ -205,3 +205,25 @@ describe('saveFieldMappingIfMissing', () => {
     expect(saveFieldMappingIfMissing('Some question?', '')).toBe(false)
   })
 })
+
+describe('field mappings — variant partitioning', () => {
+  it('stores different answers per variant for the same question', () => {
+    saveFieldMapping('Preferred name on legal docs?', 'David Lovecchio', 'generic')
+    saveFieldMapping('Preferred name on legal docs?', 'Dr. David Lovecchio', 'healthcare')
+    expect(lookupFieldMapping('Preferred name on legal docs?', 'generic')).toBe('David Lovecchio')
+    expect(lookupFieldMapping('Preferred name on legal docs?', 'healthcare')).toBe('Dr. David Lovecchio')
+  })
+
+  it('lookup defaults to generic when variant is omitted', () => {
+    saveFieldMapping('Default-variant question?', 'generic-answer')
+    expect(lookupFieldMapping('Default-variant question?')).toBe('generic-answer')
+  })
+
+  it('saveFieldMappingIfMissing scoped to variant — same question can be seeded per variant', () => {
+    expect(saveFieldMappingIfMissing('Per-variant onboarding?', 'A', 'generic')).toBe(true)
+    expect(saveFieldMappingIfMissing('Per-variant onboarding?', 'B', 'healthcare')).toBe(true)
+    expect(saveFieldMappingIfMissing('Per-variant onboarding?', 'C', 'generic')).toBe(false)
+    expect(lookupFieldMapping('Per-variant onboarding?', 'generic')).toBe('A')
+    expect(lookupFieldMapping('Per-variant onboarding?', 'healthcare')).toBe('B')
+  })
+})
