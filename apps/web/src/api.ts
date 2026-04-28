@@ -98,7 +98,8 @@ export const api = {
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
   evaluateCompanies: () => req<string[]>('/evaluate/companies'),
   evaluateOne: (id: number, deep = false) => req<unknown>(`/evaluate/${id}`, { method: 'POST', body: JSON.stringify({ deep }) }),
-  apply: (id: number, model: AutofillModel = 'haiku') => req<AutofillStartResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model }) }),
+  apply: (id: number, model: AutofillModel = 'haiku', variant?: ProfileVariant) =>
+    req<AutofillStartResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model, variant }) }),
   applyBulk: (ids: number[], model: AutofillModel = 'haiku', concurrency = 3) =>
     req<AutofillBulkResult>('/apply/bulk', { method: 'POST', body: JSON.stringify({ ids, model, concurrency }) }),
   applyRun: (jobId: number) => req<{ run: RunSummary | null }>(`/apply/jobs/${jobId}/run`),

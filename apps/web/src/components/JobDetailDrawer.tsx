@@ -1,12 +1,15 @@
 import {
   Drawer, Box, Typography, Stack, Chip, Button, IconButton,
   Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
+  Dialog, DialogTitle, DialogContent, DialogActions, RadioGroup, FormControlLabel, Radio,
+  useTheme, useMediaQuery,
 } from '@mui/material'
 import { Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown } from '@mui/icons-material'
 import { useState, useMemo, useEffect } from 'react'
 import { marked } from 'marked'
-import { api, type Job, type AutofillModel } from '../api.js'
+import { api, type Job, type AutofillModel, type ProfileVariant } from '../api.js'
 import { ScoreChip } from './ScoreChip.js'
+import { IndustryBadge } from './IndustryBadge.js'
 import { AutofillChatPanel } from './AutofillChatPanel.js'
 
 interface Props {
@@ -16,6 +19,8 @@ interface Props {
 }
 
 export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const [loading, setLoading] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [autofillAnchor, setAutofillAnchor] = useState<null | HTMLElement>(null)
@@ -23,6 +28,9 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [runId, setRunId] = useState<string | null>(null)
   const [runStatus, setRunStatus] = useState<'queued' | 'running' | 'done' | 'failed' | 'cancelled' | null>(null)
   const [runModel, setRunModel] = useState<string | null>(null)
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false)
+  const [pendingModel, setPendingModel] = useState<AutofillModel | null>(null)
+  const [pickedVariant, setPickedVariant] = useState<ProfileVariant>('generic')
 
   // Reset chat panel + message when switching jobs; look up any active run for this job
   useEffect(() => {
@@ -57,10 +65,23 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const handleApply = async (model: AutofillModel = 'haiku') => {
     if (!job) return
     setAutofillAnchor(null)
+    // Ambiguous jobs need an explicit profile pick before we can fire
+    // autofill — Step 6 backend accepts the variant override.
+    if (job.industry_vertical === 'ambiguous') {
+      setPendingModel(model)
+      setPickedVariant('generic')
+      setVariantPickerOpen(true)
+      return
+    }
+    await runApply(model)
+  }
+
+  const runApply = async (model: AutofillModel, variant?: ProfileVariant) => {
+    if (!job) return
     setLoading('apply')
     setMessage(null)
     try {
-      const { runId: newRunId } = await api.apply(job.id, model)
+      const { runId: newRunId } = await api.apply(job.id, model, variant)
       setRunId(newRunId)
       setRunStatus('queued')
       setRunModel(model)
@@ -69,6 +90,12 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     } finally {
       setLoading(null)
     }
+  }
+
+  const handleVariantPickerConfirm = async () => {
+    setVariantPickerOpen(false)
+    if (pendingModel) await runApply(pendingModel, pickedVariant)
+    setPendingModel(null)
   }
 
   const handleEvaluate = async (deep = false) => {
@@ -129,7 +156,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
             <IconButton onClick={onClose} size="small"><Close /></IconButton>
           </Stack>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+            <IndustryBadge vertical={job.industry_vertical} />
             {job.location && <Chip label={job.location} size="small" variant="outlined" />}
             {job.remote_policy && <Chip label={job.remote_policy} size="small" color="info" variant="outlined" />}
             {job.archetype && <Chip label={job.archetype} size="small" variant="outlined" />}
@@ -268,6 +296,39 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
           )}
         </Box>
       )}
+      <Dialog
+        open={variantPickerOpen}
+        onClose={() => setVariantPickerOpen(false)}
+        fullScreen={isMobile}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Which profile should fill this application?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This job didn&apos;t classify cleanly as healthcare or generic. Pick the profile
+            you want autofill to use for this run.
+          </Typography>
+          <RadioGroup value={pickedVariant} onChange={(e) => setPickedVariant(e.target.value as ProfileVariant)}>
+            <FormControlLabel
+              value="generic"
+              control={<Radio />}
+              label="Generic — broad B2B SaaS positioning"
+            />
+            <FormControlLabel
+              value="healthcare"
+              control={<Radio />}
+              label="Healthcare — clinical / EHR / payer positioning"
+            />
+          </RadioGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVariantPickerOpen(false)}>Cancel</Button>
+          <Button onClick={handleVariantPickerConfirm} variant="contained">
+            Start autofill
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   )
 }
