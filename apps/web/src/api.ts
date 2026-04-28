@@ -14,6 +14,9 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 
 export type JobStatus = 'scanned' | 'prescreened' | 'evaluated' | 'ready_to_submit' | 'applied' | 'interview' | 'completed' | 'skipped'
 
+export type IndustryVertical = 'healthcare' | 'generic' | 'ambiguous' | 'unclassified'
+export type ProfileVariant = 'healthcare' | 'generic'
+
 export interface Job {
   id: number
   source: string
@@ -34,6 +37,8 @@ export interface Job {
   applied_at?: string
   updated_at: string
   content?: { raw_text?: string; cleaned_md?: string } | null
+  industry_vertical?: IndustryVertical
+  directional_score?: number
 }
 
 export interface TokenUsage { prompt: number; completion: number; total: number }
