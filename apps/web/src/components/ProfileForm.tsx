@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Stack, TextField, MenuItem, Select, FormControl, InputLabel,
   Table, TableBody, TableCell, TableHead, TableRow, IconButton,
-  Button, Box, Typography,
+  Button, Box, Typography, ToggleButton, ToggleButtonGroup,
 } from '@mui/material'
 import { Autocomplete } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
@@ -23,10 +23,25 @@ interface Candidate {
   current_company: string; years_of_experience: string; how_did_you_hear: string
 }
 
+interface VariantNarrative {
+  headline: string
+  exit_story: string
+  superpowers: string[]
+  proof_points: ProofPoint[]
+}
+
+type ProfileVariantKey = 'healthcare' | 'generic'
+
 interface Profile {
   candidate: Candidate
   target_roles: { primary: string[]; archetypes: Archetype[] }
-  narrative: { headline: string; exit_story: string; superpowers: string[]; proof_points: ProofPoint[] }
+  narrative: {
+    headline: string
+    exit_story: string
+    superpowers: string[]
+    proof_points: ProofPoint[]
+    variants?: Partial<Record<ProfileVariantKey, VariantNarrative>>
+  }
   compensation: { target_range: string; currency: string; minimum: string; location_flexibility: string }
   location: { country: string; city: string; timezone: string; visa_status: string }
   prescreen: {
@@ -40,6 +55,10 @@ interface Profile {
     blocklist_titles: string[]
     archetype_keywords: ArchetypeKeywords
   }
+}
+
+const EMPTY_VARIANT_NARRATIVE: VariantNarrative = {
+  headline: '', exit_story: '', superpowers: [], proof_points: [],
 }
 
 const EMPTY: Profile = {
@@ -66,6 +85,7 @@ const FIT_OPTIONS = ['primary', 'secondary', 'adjacent']
 
 export function ProfileForm() {
   const [profile, setProfile] = useState<Profile>(EMPTY)
+  const [activeVariant, setActiveVariant] = useState<ProfileVariantKey>('generic')
 
   const save = async () => { await api.settings.saveProfile(profile) }
   const { saving, saved, error, setBaseline } = useAutoSave(profile, save)
@@ -86,8 +106,44 @@ export function ProfileForm() {
   const setCandidate = (field: keyof Profile['candidate'], value: string) =>
     set('candidate', { ...profile.candidate, [field]: value })
 
-  const setNarrative = (field: keyof Profile['narrative'], value: unknown) =>
-    set('narrative', { ...profile.narrative, [field]: value })
+  // Read narrative fields from the active variant block, falling back to the
+  // top-level narrative (which Step 1's loaders also use as fallback). Writes
+  // always go to the variant block — top-level stays untouched so legacy
+  // single-profile reads still work.
+  const variantBlock: VariantNarrative = {
+    ...EMPTY_VARIANT_NARRATIVE,
+    ...{
+      headline: profile.narrative.headline,
+      exit_story: profile.narrative.exit_story,
+      superpowers: profile.narrative.superpowers,
+      proof_points: profile.narrative.proof_points,
+    },
+    ...(profile.narrative.variants?.[activeVariant] ?? {}),
+  }
+
+  const setNarrative = (field: keyof VariantNarrative, value: unknown) => {
+    const currentVariants = profile.narrative.variants ?? {}
+    const currentBlock = currentVariants[activeVariant] ?? variantBlock
+    set('narrative', {
+      ...profile.narrative,
+      variants: {
+        ...currentVariants,
+        [activeVariant]: { ...currentBlock, [field]: value },
+      },
+    })
+  }
+
+  const copyFromOtherVariant = () => {
+    const other: ProfileVariantKey = activeVariant === 'healthcare' ? 'generic' : 'healthcare'
+    const sourceBlock = profile.narrative.variants?.[other] ?? variantBlock
+    set('narrative', {
+      ...profile.narrative,
+      variants: {
+        ...(profile.narrative.variants ?? {}),
+        [activeVariant]: { ...sourceBlock },
+      },
+    })
+  }
 
   const setCompensation = (field: keyof Profile['compensation'], value: string) =>
     set('compensation', { ...profile.compensation, [field]: value })
@@ -236,39 +292,64 @@ export function ProfileForm() {
         </Table>
       </Stack>
 
-      {/* ── Narrative ── */}
+      {/* ── Narrative (per-variant) ── */}
       <Stack spacing={2}>
-        <SectionHeader title="Narrative" description="Used in evaluation prompts to give Claude context about you." />
-        <TextField label="Headline" value={profile.narrative.headline} onChange={e => setNarrative('headline', e.target.value)} fullWidth size="small" placeholder="ML Engineer turned AI product builder" />
-        <TextField label="Exit story / unique angle" value={profile.narrative.exit_story} onChange={e => setNarrative('exit_story', e.target.value)} fullWidth size="small" multiline minRows={2} />
-        <ChipArrayInput label="Superpowers" values={profile.narrative.superpowers} onChange={v => setNarrative('superpowers', v)} placeholder="e.g. Fast prototyping" />
+        <SectionHeader
+          title="Narrative"
+          description="Used in evaluation prompts. Two variants — pick the tab to edit one. Other fields (candidate, compensation, location) are shared across variants."
+        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          justifyContent="space-between"
+          sx={{ flexWrap: 'wrap' }}
+        >
+          <ToggleButtonGroup
+            value={activeVariant}
+            exclusive
+            size="small"
+            onChange={(_, v) => v && setActiveVariant(v as ProfileVariantKey)}
+          >
+            <ToggleButton value="generic">Generic</ToggleButton>
+            <ToggleButton value="healthcare">Healthcare</ToggleButton>
+          </ToggleButtonGroup>
+          <Button size="small" variant="text" onClick={copyFromOtherVariant}>
+            Copy from {activeVariant === 'healthcare' ? 'Generic' : 'Healthcare'}
+          </Button>
+        </Stack>
+        <TextField label="Headline" value={variantBlock.headline} onChange={e => setNarrative('headline', e.target.value)} fullWidth size="small" placeholder="ML Engineer turned AI product builder" />
+        <TextField label="Exit story / unique angle" value={variantBlock.exit_story} onChange={e => setNarrative('exit_story', e.target.value)} fullWidth size="small" multiline minRows={2} />
+        <ChipArrayInput label="Superpowers" values={variantBlock.superpowers} onChange={v => setNarrative('superpowers', v)} placeholder="e.g. Fast prototyping" />
 
         <Typography variant="caption" color="text.secondary">Proof points</Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>URL</TableCell>
-              <TableCell>Hero metric</TableCell>
-              <TableCell width={40} />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {profile.narrative.proof_points.map((p, i) => (
-              <TableRow key={i}>
-                <TableCell><TextField variant="standard" value={p.name} size="small" onChange={e => setNarrative('proof_points', profile.narrative.proof_points.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} /></TableCell>
-                <TableCell><TextField variant="standard" value={p.url} size="small" fullWidth onChange={e => setNarrative('proof_points', profile.narrative.proof_points.map((x, j) => j === i ? { ...x, url: e.target.value } : x))} /></TableCell>
-                <TableCell><TextField variant="standard" value={p.hero_metric} size="small" onChange={e => setNarrative('proof_points', profile.narrative.proof_points.map((x, j) => j === i ? { ...x, hero_metric: e.target.value } : x))} /></TableCell>
-                <TableCell><IconButton size="small" onClick={() => setNarrative('proof_points', profile.narrative.proof_points.filter((_, j) => j !== i))}><Delete fontSize="small" /></IconButton></TableCell>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 480 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>URL</TableCell>
+                <TableCell>Hero metric</TableCell>
+                <TableCell width={40} />
               </TableRow>
-            ))}
-            <TableRow>
-              <TableCell colSpan={4}>
-                <Button size="small" startIcon={<Add />} onClick={() => setNarrative('proof_points', [...profile.narrative.proof_points, { name: '', url: '', hero_metric: '' }])}>Add proof point</Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {variantBlock.proof_points.map((p, i) => (
+                <TableRow key={i}>
+                  <TableCell><TextField variant="standard" value={p.name} size="small" onChange={e => setNarrative('proof_points', variantBlock.proof_points.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} /></TableCell>
+                  <TableCell><TextField variant="standard" value={p.url} size="small" fullWidth onChange={e => setNarrative('proof_points', variantBlock.proof_points.map((x, j) => j === i ? { ...x, url: e.target.value } : x))} /></TableCell>
+                  <TableCell><TextField variant="standard" value={p.hero_metric} size="small" onChange={e => setNarrative('proof_points', variantBlock.proof_points.map((x, j) => j === i ? { ...x, hero_metric: e.target.value } : x))} /></TableCell>
+                  <TableCell><IconButton size="small" onClick={() => setNarrative('proof_points', variantBlock.proof_points.filter((_, j) => j !== i))}><Delete fontSize="small" /></IconButton></TableCell>
+                </TableRow>
+              ))}
+              <TableRow>
+                <TableCell colSpan={4}>
+                  <Button size="small" startIcon={<Add />} onClick={() => setNarrative('proof_points', [...variantBlock.proof_points, { name: '', url: '', hero_metric: '' }])}>Add proof point</Button>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Box>
       </Stack>
 
       {/* ── Compensation ── */}
