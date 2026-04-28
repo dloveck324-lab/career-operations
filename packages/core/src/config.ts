@@ -25,6 +25,15 @@ export interface CandidateProfile {
   how_did_you_hear?: string
 }
 
+export type ProfileVariant = 'healthcare' | 'generic'
+
+export interface VariantNarrative {
+  headline: string
+  exit_story?: string
+  superpowers?: string[]
+  proof_points?: Array<{ name: string; url?: string; hero_metric?: string }>
+}
+
 export interface ProfileConfig {
   candidate: CandidateProfile
   target_roles: {
@@ -36,6 +45,7 @@ export interface ProfileConfig {
     exit_story?: string
     superpowers?: string[]
     proof_points?: Array<{ name: string; url?: string; hero_metric?: string }>
+    variants?: Partial<Record<ProfileVariant, VariantNarrative>>
   }
   compensation: {
     target_range: string
@@ -97,13 +107,28 @@ export function loadProfile(): ProfileConfig | null {
   return yaml.load(readFileSync(path, 'utf-8')) as ProfileConfig
 }
 
+export function loadProfileVariant(variant: ProfileVariant): ProfileConfig | null {
+  const profile = loadProfile()
+  if (!profile) return null
+  const variantBlock = profile.narrative?.variants?.[variant]
+  if (!variantBlock) return profile
+  return {
+    ...profile,
+    narrative: { ...profile.narrative, ...variantBlock },
+  }
+}
+
 export function loadFilters(): FiltersConfig | null {
   const path = resolve(CONFIG_ROOT, 'filters.yml')
   if (!existsSync(path)) return null
   return yaml.load(readFileSync(path, 'utf-8')) as FiltersConfig
 }
 
-export function loadCv(): string | null {
+export function loadCv(variant?: ProfileVariant): string | null {
+  if (variant) {
+    const variantPath = resolve(CONFIG_ROOT, `cv-${variant}.md`)
+    if (existsSync(variantPath)) return readFileSync(variantPath, 'utf-8')
+  }
   const path = resolve(CONFIG_ROOT, 'cv.md')
   if (!existsSync(path)) return null
   return readFileSync(path, 'utf-8')
