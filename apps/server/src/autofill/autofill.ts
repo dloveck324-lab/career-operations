@@ -62,15 +62,38 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const QUICKFILL_SCRIPT = resolve(__dirname, 'quickfill.sh')
 
 /**
+ * Resolve a concrete profile variant for a job in the autofill flow.
+ * Healthcare stays healthcare; everything else (generic, ambiguous,
+ * unclassified, undefined) falls back to generic. For ambiguous jobs we
+ * log a warning so it's discoverable until Step 7 surfaces a UI picker.
+ */
+export function resolveVariantForJob(job: Job): 'healthcare' | 'generic' {
+  if (job.industry_vertical === 'healthcare') return 'healthcare'
+  if (job.industry_vertical === 'ambiguous') {
+    console.warn(`[autofill] job ${job.id} is ambiguous — defaulting to 'generic' variant. ` +
+      `(Step 7 will add a UI picker for this case.)`)
+  }
+  return 'generic'
+}
+
+/**
  * Kick off an autofill run. Returns immediately with the runId; the caller
  * should subscribe to /apply/runs/:runId/events to watch progress.
+ *
+ * The variant is locked at run-create time and sticks for the full session
+ * (pause/resume, save-mappings) — see Step 6 of docs/DUAL_PROFILE_MIGRATION.md.
+ * If `variant` isn't passed, we resolve from job.industry_vertical: healthcare
+ * stays healthcare; everything else (generic, ambiguous, unclassified) maps
+ * to generic. Step 7 will surface a UI picker for ambiguous jobs and pass
+ * the explicit variant through.
  */
 export async function startAutofill(
   job: Job,
-  opts: { model?: AutofillModel } = {},
+  opts: { model?: AutofillModel; variant?: 'healthcare' | 'generic' } = {},
 ): Promise<{ runId: string }> {
   const model: AutofillModel = opts.model ?? 'haiku'
-  const run = runRegistry.create(job.id, model)
+  const variant: 'healthcare' | 'generic' = opts.variant ?? resolveVariantForJob(job)
+  const run = runRegistry.create(job.id, model, variant)
 
   // Fire-and-forget. All progress is surfaced via runRegistry events.
   void runOrchestration(run, job).catch((err) => {
@@ -148,8 +171,7 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
     return
   }
 
-  const variant: 'healthcare' | 'generic' =
-    job.industry_vertical === 'healthcare' ? 'healthcare' : 'generic'
+  const variant = run.variant
   const profile = loadProfileVariant(variant) ?? loadProfile()
   const cv = loadCv(variant)
   if (!profile) {
@@ -159,6 +181,7 @@ async function runOrchestration(run: Run, job: Job): Promise<void> {
   }
 
   const mappings = getAllFieldMappings(variant)
+  runRegistry.publish(run.id, 'status', { stage: 'profile_variant_resolved', variant })
   const ats = detectAts(job.url)
   const prompt = buildAgentPrompt(job, profile, cv, tabId, mappings, ats)
   runRegistry.publish(run.id, 'prompt', { text: prompt, model: MODEL_IDS[run.model], ats })

@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { getJob, saveFieldMappingIfMissing } from '../db/queries.js'
-import { startAutofill, type AutofillModel } from '../autofill/autofill.js'
+import { startAutofill, resolveVariantForJob, type AutofillModel } from '../autofill/autofill.js'
 import { runRegistry } from '../autofill/runs.js'
+
+const VARIANTS = ['healthcare', 'generic'] as const
 
 const MODELS = ['haiku', 'sonnet', 'opus'] as const
 const DEFAULT_CONCURRENCY = 3
@@ -13,12 +15,13 @@ export async function applyRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const body = z.object({
       model: z.enum(MODELS).optional().default('haiku'),
+      variant: z.enum(VARIANTS).optional(),
     }).parse(req.body ?? {})
 
     const job = getJob(Number(id))
     if (!job) throw app.httpErrors.notFound('Job not found')
 
-    const { runId } = await startAutofill(job, { model: body.model })
+    const { runId } = await startAutofill(job, { model: body.model, variant: body.variant })
     return { runId, jobId: job.id }
   })
 
@@ -28,13 +31,21 @@ export async function applyRoutes(app: FastifyInstance) {
       ids: z.array(z.number()).min(1),
       model: z.enum(MODELS).optional().default('haiku'),
       concurrency: z.number().int().min(1).max(6).optional().default(DEFAULT_CONCURRENCY),
+      // No top-level variant override for bulk — each job uses its own
+      // resolved variant (healthcare/generic/fallback). Mixed-variant batches
+      // are allowed and expected.
     }).parse(req.body)
 
     const jobs = body.ids.map(getJob).filter(Boolean) as NonNullable<ReturnType<typeof getJob>>[]
     if (jobs.length === 0) throw app.httpErrors.badRequest('No valid jobs found')
 
-    // Queue everything up-front so the UI can show all of them as queued
-    const runs = jobs.map(j => ({ jobId: j.id, runId: runRegistry.create(j.id, body.model as AutofillModel).id }))
+    // Queue everything up-front so the UI can show all of them as queued.
+    // Pre-resolve variant per-job so the registry has the right value before
+    // the worker actually starts.
+    const runs = jobs.map(j => ({
+      jobId: j.id,
+      runId: runRegistry.create(j.id, body.model as AutofillModel, resolveVariantForJob(j)).id,
+    }))
 
     // Kick off with bounded concurrency
     const queue = [...jobs]
@@ -150,9 +161,9 @@ export async function applyRoutes(app: FastifyInstance) {
     const run = runRegistry.get(runId)
     if (!run) throw app.httpErrors.notFound('Run not found')
 
-    const job = getJob(run.jobId)
-    const variant: 'healthcare' | 'generic' =
-      job?.industry_vertical === 'healthcare' ? 'healthcare' : 'generic'
+    // Variant is sticky on the run — survives pause/resume and matches the
+    // profile the agent was actually filling against.
+    const variant = run.variant
 
     let saved = 0
     let skipped = 0

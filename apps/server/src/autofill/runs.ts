@@ -28,10 +28,18 @@ export interface RunEvent {
   data: Record<string, unknown>
 }
 
+export type RunVariant = 'healthcare' | 'generic'
+
 export interface Run {
   id: string                // short runId (8-char)
   jobId: number
   model: AutofillModel
+  /**
+   * Profile variant locked in at run-create time. Sticky across pause/resume
+   * and save-mappings so the user's profile choice survives the whole session.
+   * See Step 6 of docs/DUAL_PROFILE_MIGRATION.md.
+   */
+  variant: RunVariant
   tabId?: string            // PinchTab tab ID (per-run isolation)
   sessionId?: string        // Claude session ID (from system:init)
   child?: ChildProcessWithoutNullStreams
@@ -52,7 +60,7 @@ export class RunRegistry {
   private runs = new Map<string, Run>()
   private byJob = new Map<number, string>()   // jobId → runId (latest)
 
-  create(jobId: number, model: AutofillModel): Run {
+  create(jobId: number, model: AutofillModel, variant: RunVariant = 'generic'): Run {
     // If there's an active run for this job, cancel it so we don't double-run
     const prevId = this.byJob.get(jobId)
     if (prevId) {
@@ -63,7 +71,7 @@ export class RunRegistry {
     }
     const id = randomUUID().slice(0, 8)
     const run: Run = {
-      id, jobId, model,
+      id, jobId, model, variant,
       status: 'queued',
       startedAt: Date.now(),
       events: [],
