@@ -18,6 +18,8 @@ import {
 } from '@mui/x-data-grid'
 import { api, type Job, type JobStatus, type Stats, type ClaudeUsage } from '../api.js'
 import { ScoreChip } from '../components/ScoreChip.js'
+import { DirectionalScoreChip } from '../components/DirectionalScoreChip.js'
+import { IndustryBadge } from '../components/IndustryBadge.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
 import { useAssistant } from '../contexts/AssistantContext.js'
@@ -274,6 +276,19 @@ function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]
         {highlightKeywords(value as string, positiveKeywords)}
       </Typography>
     ),
+  },
+  {
+    field: 'industry_vertical',
+    headerName: 'Industry',
+    width: 110,
+    renderCell: ({ value }) => <IndustryBadge vertical={value as Job['industry_vertical']} />,
+  },
+  {
+    field: 'directional_score',
+    headerName: 'Directional',
+    width: 110,
+    renderCell: ({ value }) => <DirectionalScoreChip score={value as number | null} />,
+    sortComparator: (a, b) => (b ?? -1) - (a ?? -1),
   },
   {
     field: 'score',
