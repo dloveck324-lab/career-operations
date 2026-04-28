@@ -17,10 +17,16 @@ export function upsertJob(job: Omit<Job, 'id' | 'scraped_at' | 'updated_at'>): {
 
   const result = db.prepare(`
     INSERT INTO jobs (source, external_id, url, company, title, location, remote_policy,
-                      comp_text, description_hash, status, archetype, skip_reason)
+                      comp_text, description_hash, status, archetype, skip_reason,
+                      industry_vertical, directional_score)
     VALUES (@source, @external_id, @url, @company, @title, @location, @remote_policy,
-            @comp_text, @description_hash, @status, @archetype, @skip_reason)
-  `).run(job)
+            @comp_text, @description_hash, @status, @archetype, @skip_reason,
+            COALESCE(@industry_vertical, 'unclassified'), @directional_score)
+  `).run({
+    ...job,
+    industry_vertical: job.industry_vertical ?? null,
+    directional_score: job.directional_score ?? null,
+  })
 
   return { inserted: true, id: result.lastInsertRowid as number }
 }
@@ -338,11 +344,15 @@ export function saveEvaluation(data: {
   score: number
   verdict_md?: string
   raw_response?: string
+  profile_variant?: 'healthcare' | 'generic'
 }) {
   db.prepare(`
-    INSERT INTO evaluations (job_id, model, prompt_tokens, completion_tokens, score, verdict_md, raw_response)
-    VALUES (@job_id, @model, @prompt_tokens, @completion_tokens, @score, @verdict_md, @raw_response)
-  `).run(data)
+    INSERT INTO evaluations
+      (job_id, model, prompt_tokens, completion_tokens, score, verdict_md, raw_response, profile_variant)
+    VALUES
+      (@job_id, @model, @prompt_tokens, @completion_tokens, @score, @verdict_md, @raw_response,
+       COALESCE(@profile_variant, 'generic'))
+  `).run({ ...data, profile_variant: data.profile_variant ?? null })
 }
 
 export function getTokenUsage(since: 'day' | 'week' | 'month' = 'day'): { prompt: number; completion: number; total: number } {

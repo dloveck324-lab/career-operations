@@ -84,9 +84,11 @@ export async function evaluateRoutes(app: FastifyInstance) {
         try {
           broadcastEvalEvent({ type: 'eval_start', jobId: job.id, company: job.company, title: job.title, total: jobs.length, done })
           const content = getJobContent(job.id)
-          const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', false, modelOverride, signal)
+          const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', { depth: 'quick', modelOverride, signal })
           if (signal.aborted) { broadcastEvalEvent({ type: 'eval_paused', done }); return }
           saveEvaluation({ job_id: job.id, ...result })
+          // Ambiguous jobs run dual eval — persist the secondary result too.
+          if (result.dual_secondary) saveEvaluation({ job_id: job.id, ...result.dual_secondary })
           updateJobStatus(job.id, 'evaluated', {
             score: result.score,
             score_reason: result.verdict_md?.slice(0, 1000),
@@ -112,8 +114,9 @@ export async function evaluateRoutes(app: FastifyInstance) {
     const job = getJob(Number(id))
     if (!job) throw app.httpErrors.notFound('Job not found')
     const content = getJobContent(Number(id))
-    const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', body.deep)
+    const result = await evaluateJob(job, content?.cleaned_md ?? content?.raw_text ?? '', { depth: body.deep ? 'deep' : 'quick' })
     saveEvaluation({ job_id: job.id, ...result })
+    if (result.dual_secondary) saveEvaluation({ job_id: job.id, ...result.dual_secondary })
     updateJobStatus(job.id, 'evaluated', {
       score: result.score,
       score_reason: result.verdict_md?.slice(0, 1000),

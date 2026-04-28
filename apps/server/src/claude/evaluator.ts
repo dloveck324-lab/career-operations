@@ -1,8 +1,8 @@
 import { spawn } from 'child_process'
-import { loadProfile, loadCv } from '@job-pipeline/core'
-import type { Job } from '../db/schema.js'
+import { loadProfile, loadProfileVariant, loadCv, type ProfileVariant } from '@job-pipeline/core'
+import type { Job, ProfileVariantDb } from '../db/schema.js'
 
-export interface EvalResult {
+export interface ParsedEvalResponse {
   model: string
   score: number          // 1–5 global score (career-ops scale)
   archetype: string | null
@@ -16,17 +16,73 @@ export interface EvalResult {
   raw_response: string
 }
 
+export interface EvalResult extends ParsedEvalResponse {
+  profile_variant: ProfileVariantDb
+  /** Populated only for ambiguous jobs in Tier 2/3 — the loser of the dual eval. */
+  dual_secondary?: EvalResult
+}
+
+export interface EvaluateOptions {
+  /** Force a specific profile variant. Defaults to job.industry_vertical → 'generic' fallback. */
+  variant?: ProfileVariant
+  /** Tier 2 = quick (Haiku). Tier 3 = deep (Sonnet). */
+  depth?: 'quick' | 'deep'
+  modelOverride?: string
+  signal?: AbortSignal
+}
+
 const MAX_DESC_CHARS = 3000  // ~750 tokens
 
-export async function evaluateJob(job: Job, description: string, deep = false, modelOverride?: string, signal?: AbortSignal): Promise<EvalResult> {
-  const profile = loadProfile()
-  const cv = loadCv()
-  const model = modelOverride ?? (deep ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001')
+/**
+ * Tier 2/3 evaluator (Step 4 of docs/DUAL_PROFILE_MIGRATION.md).
+ *
+ * - Picks profile variant from job.industry_vertical unless explicitly overridden.
+ * - For ambiguous jobs: runs healthcare + generic in parallel and returns the
+ *   higher-scoring one as primary, with the loser attached as dual_secondary.
+ *
+ * Backward compat: legacy positional signature (job, description, deep, modelOverride, signal)
+ * still works — callers were updated in Step 4.
+ */
+export async function evaluateJob(
+  job: Job,
+  description: string,
+  options: EvaluateOptions = {},
+): Promise<EvalResult> {
+  const target = options.variant ?? resolveVariantFromJob(job)
+
+  if (target === 'ambiguous') {
+    const [hc, generic] = await Promise.all([
+      evaluateJobInternal(job, description, 'healthcare', options),
+      evaluateJobInternal(job, description, 'generic', options),
+    ])
+    const [primary, secondary] = hc.score >= generic.score ? [hc, generic] : [generic, hc]
+    return { ...primary, dual_secondary: secondary }
+  }
+
+  return evaluateJobInternal(job, description, target, options)
+}
+
+function resolveVariantFromJob(job: Job): ProfileVariant | 'ambiguous' {
+  const v = job.industry_vertical
+  if (v === 'healthcare' || v === 'generic' || v === 'ambiguous') return v
+  return 'generic'  // 'unclassified' or undefined → generic (safe default)
+}
+
+async function evaluateJobInternal(
+  job: Job,
+  description: string,
+  variant: ProfileVariant,
+  options: EvaluateOptions,
+): Promise<EvalResult> {
+  const profile = loadProfileVariant(variant) ?? loadProfile()
+  const cv = loadCv(variant)
+  const deep = options.depth === 'deep'
+  const model = options.modelOverride ?? (deep ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001')
 
   const prompt = buildSkillPrompt(profile, cv, job, description)
-
-  const raw = await runClaudeCli(prompt, model, signal)
-  return parseEvalResponse(raw, model)
+  const raw = await runClaudeCli(prompt, model, options.signal)
+  const parsed = parseEvalResponse(raw, model)
+  return { ...parsed, profile_variant: variant }
 }
 
 function buildSkillPrompt(
@@ -107,7 +163,7 @@ async function runClaudeCli(prompt: string, model: string, signal?: AbortSignal)
   })
 }
 
-export function parseEvalResponse(raw: string, model: string): EvalResult {
+export function parseEvalResponse(raw: string, model: string): ParsedEvalResponse {
   const cleaned = raw.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
 
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/)

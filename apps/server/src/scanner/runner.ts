@@ -1,5 +1,6 @@
-import { loadFilters, loadProfile, buildPrescreen } from '@job-pipeline/core'
+import { loadFilters, loadProfile, buildPrescreen, classifyVertical } from '@job-pipeline/core'
 import { upsertJob, upsertJobContent, hashText } from '../db/queries.js'
+import { computeDirectionalScore } from './directional-score.js'
 import { scanGreenhouse } from './adapters/greenhouse.js'
 import { scanAshby } from './adapters/ashby.js'
 import { scanLever } from './adapters/lever.js'
@@ -69,6 +70,18 @@ export async function runScan(
 
     const status = prescreenResult.pass ? 'prescreened' as const : 'skipped' as const
 
+    // Tier 1: zero-token classification + directional score (every scan).
+    const industry_vertical = classifyVertical({
+      title: raw.title,
+      description: raw.description ?? '',
+      company: raw.company,
+    })
+    const directional_score = computeDirectionalScore(profile, {
+      title: raw.title,
+      description: raw.description,
+      company: raw.company,
+    })
+
     const { inserted, id } = upsertJob({
       source: raw.source,
       external_id: raw.external_id,
@@ -84,6 +97,8 @@ export async function runScan(
       score: undefined,
       score_reason: undefined,
       skip_reason: prescreenResult.reason ?? 'Skipped: prescreen',
+      industry_vertical,
+      directional_score,
     })
 
     if (inserted) {
