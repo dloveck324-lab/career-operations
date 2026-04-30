@@ -21,6 +21,7 @@ import { ScoreChip } from '../components/ScoreChip.js'
 import { DirectionalScoreChip } from '../components/DirectionalScoreChip.js'
 import { IndustryBadge } from '../components/IndustryBadge.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
+import { useGridState } from '../hooks/useGridState.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
 import { useAssistant } from '../contexts/AssistantContext.js'
 
@@ -380,6 +381,12 @@ export function PipelinePage() {
 
   // Table state
   const [tab, setTab] = useState(0)
+  // Persisted DataGrid state per pipeline tab (sort + filter survive reloads).
+  // Column visibility stays driven by isMobile so we don't accidentally lock
+  // a desktop user out of columns they hid earlier on a phone.
+  const gridState = useGridState(`pipeline:tab-${tab}`, {
+    sortModel: [{ field: 'score', sort: 'desc' }],
+  })
   const [jobs, setJobs] = useState<Job[]>([])
   const [stats, setStats] = useState<Stats>({})
   const [loading, setLoading] = useState(false)
@@ -975,7 +982,10 @@ export function PipelinePage() {
                 if (evalQueueIds.has(n)) return 'eval-queued'
                 return ''
               }}
-              initialState={{ sorting: { sortModel: [{ field: 'score', sort: 'desc' }] } }}
+              sortModel={gridState.sortModel}
+              onSortModelChange={gridState.onSortModelChange}
+              filterModel={gridState.filterModel}
+              onFilterModelChange={gridState.onFilterModelChange}
               columnVisibilityModel={isMobile ? { archetype: false, location: false, scraped_at: false, evaluated_at: false } : {}}
               sx={{
                 border: 'none',

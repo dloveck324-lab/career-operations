@@ -13,6 +13,7 @@ import {
 } from '@mui/x-data-grid'
 import { api, type DiscoveredPortal } from '../api.js'
 import { SaveBar } from './SaveBar.js'
+import { useGridState } from '../hooks/useGridState.js'
 
 type AtsType = 'greenhouse' | 'ashby' | 'lever' | 'workday' | 'custom'
 
@@ -80,6 +81,11 @@ export function PortalsForm() {
   const [discovered, setDiscovered] = useState<(DiscoveredPortal & { _new: boolean })[]>([])
   const [discoverError, setDiscoverError] = useState<string | null>(null)
   const [selection, setSelection] = useState<GridRowSelectionModel>([])
+
+  // Persisted DataGrid state (sort, column visibility, filter) — survives reloads
+  const gridState = useGridState('settings:portals', {
+    sortModel: [{ field: 'name', sort: 'asc' }],
+  })
 
   // Bulk import (paste YAML or JSON of portal entries)
   const theme = useTheme()
@@ -314,10 +320,13 @@ export function PortalsForm() {
           density="compact"
           disableRowSelectionOnClick
           getRowClassName={({ row }) => row.enabled ? '' : 'row-disabled'}
-          initialState={{
-            sorting: { sortModel: [{ field: 'name', sort: 'asc' }] },
-            pagination: { paginationModel: { pageSize: 50, page: 0 } },
-          }}
+          sortModel={gridState.sortModel}
+          onSortModelChange={gridState.onSortModelChange}
+          columnVisibilityModel={gridState.columnVisibilityModel}
+          onColumnVisibilityModelChange={gridState.onColumnVisibilityModelChange}
+          filterModel={gridState.filterModel}
+          onFilterModelChange={gridState.onFilterModelChange}
+          initialState={{ pagination: { paginationModel: { pageSize: 50, page: 0 } } }}
           pageSizeOptions={[25, 50, 100]}
           sx={{
             border: '1px solid',
