@@ -261,20 +261,20 @@ node scripts/represcreen.mjs             # apply
 
 **Never bypass the skill.** If you need to change autofill behavior, edit `.claude/skills/autofiller/SKILL.md`, the relevant `ats/*.md`, or `uploads.md` / `dialogs.md`. Do NOT move logic into `autofill.ts` — the skill is the source of truth for agent behavior.
 
-## Commit & Version Bump — Regra Obrigatória
+## Commit & Version Bump — Required Rule
 
-**Ao concluir qualquer feature, bugfix ou refactor de relevância, Claude DEVE proativamente:**
+**When completing any meaningful feature, bugfix, or refactor, Claude MUST proactively:**
 
-1. **Version bump** no `package.json` raiz:
-   - patch (`x.x.N`) para bugfix/refactor/change
-   - minor (`x.N.0`) para feature nova
-   - major (`N.0.0`) apenas se quebrar API existente
-2. **Commit** com todas as mudanças relevantes:
+1. **Version bump** in the root `package.json`:
+   - patch (`x.x.N`) for bugfix/refactor/change
+   - minor (`x.N.0`) for new feature
+   - major (`N.0.0`) only if breaking the existing API
+2. **Commit** with all relevant changes:
    ```
-   git add <arquivos modificados>
-   git commit -m "tipo: descrição concisa\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+   git add <modified files>
+   git commit -m "type: concise description\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
    ```
-3. **Branch alvo:** `dave-app` (remote: `origin` → `dloveck324-lab/career-ops`)
-4. **Push automático** para `origin/dave-app` após o commit.
+3. **Target branch:** determined by the Branch Targeting rule at the top of this file. `career-ops-dave` for personal-only changes, `demo-mode` for demo-only, both for shared changes.
+4. **Auto-push** to the appropriate `origin/<branch>` after the commit.
 
-**Nunca perguntar se deve commitar** — fazê-lo automaticamente ao término de cada feature/fix. Nunca agrupar múltiplas features no mesmo commit. Cada entrega = um commit.
+**Never ask whether to commit.** Do it automatically at the end of each feature/fix. Never bundle multiple features in the same commit. Each delivery = one commit.

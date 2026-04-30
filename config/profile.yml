@@ -15,7 +15,7 @@ candidate:
   requires_sponsorship: 'No'
   current_company: eVisit
   years_of_experience: ''
-  how_did_you_hear: ''
+  how_did_you_hear: Linkedin
 target_roles:
   primary:
     - Director of Product
@@ -34,34 +34,118 @@ target_roles:
       fit: adjacent
     - name: Senior Product Manager
       level: Senior
+      fit: adjacent
+    - name: Principal Prooduct Manager
+      level: Senior
+      fit: secondary
+    - name: Group Product Manager
+      level: Senior
+      fit: secondary
+    - name: Lead Product Manager
+      level: Senior
+      fit: secondary
+    - name: Staff Product Manager
+      level: Senior
       fit: secondary
 narrative:
-  headline: Strategic product leader with 10+ years driving product vision in SaaS and Fortune 50 healthcare
+  headline: Director-level product leader with 12+ years driving product vision across B2B SaaS and Fortune 50 enterprises
   exit_story: >-
-    Director of Product at eVisit (healthcare SaaS) since 2020, where I drove 5x platform utilization growth, retained
-    $11.2M in enterprise revenue, and managed a product org that grew from 4 to 17. Previously led product at J&J across
-    Janssen, Medical Devices, and Ethicon. Looking for my next Director/Head of Product role where I can combine AI
-    tooling fluency with deep healthcare and SaaS experience to drive meaningful product outcomes.
+    Director of Product at eVisit since 2020, where I drove 5x platform usage growth, retained $11.2M in enterprise
+    revenue, and managed a product org that grew from 4 to 17. Previously led product at J&J across Janssen, Medical
+    Devices, and Ethicon. Looking for my next Director or Head of Product role at growth-stage B2B or B2B2C SaaS where
+    AI is core to the product, operating as an AI-augmented PM who uses Claude to operate and build faster, and to ship
+    AI-native features into production.
   superpowers:
+    - AI-augmented PM operating across the full product lifecycle
+    - Shipping AI-native features into production (Vecchio, Furniture Curator, Career-ops)
     - Revenue retention and enterprise account management
     - M&A product integration
     - Cross-functional team leadership
-    - AI tooling across the full product lifecycle
     - Data-driven product strategy
-    - Healthcare SaaS and regulated environments
   proof_points:
     - name: eVisit Platform Growth
       url: DavidGLovecchio.com
-      hero_metric: 5x platform utilization, 1M+ annual visits
+      hero_metric: 5x platform usage, 1M+ annual sessions across enterprise customers in all 50 states
     - name: Enterprise Revenue Retention
       url: ''
       hero_metric: $11.2M retained, all top 10 accounts renewed (93% ARR)
     - name: M&A Integration
       url: ''
       hero_metric: $6M ARR secured by consolidating 4 platforms across 2 acquisitions
-    - name: KLAS Award
-      url: ''
-      hero_metric: Back-to-back KLAS awards, 10% above industry average
+    - name: AI Product Shipped
+      url: vecchiovirtualcare.vercel.app
+      hero_metric: >-
+        End-to-end AI-orchestration platform with structured-output drafting, multi-step reasoning, embedded
+        conversational agents
+  variants:
+    healthcare:
+      headline: >-
+        Director-level product leader with 12+ years driving product vision across B2B SaaS and Fortune 50 healthcare
+        (J&J)
+      exit_story: >-
+        Director of Product at eVisit (healthcare SaaS) since 2020, where I drove 5x platform utilization, retained
+        $11.2M in enterprise revenue across hospital and ambulatory networks, and managed a product org that grew from 4
+        to 17. Previously led product at J&J across Janssen, Medical Devices, and Ethicon. Looking for my next Director
+        or Head of Product role in regulated healthcare SaaS, operating as an AI-augmented PM who uses Claude to operate
+        and build faster, and to ship AI-native features into production.
+      superpowers:
+        - AI-augmented PM operating across the full product lifecycle
+        - Shipping AI-native features in regulated healthcare contexts (Vecchio Virtual Care)
+        - Revenue retention and enterprise account management in healthcare SaaS
+        - M&A product integration
+        - EHR integration (Epic/Cerner) and clinical workflow design
+        - Cross-functional team leadership in regulated environments
+      proof_points:
+        - name: eVisit Platform Growth
+          url: DavidGLovecchio.com
+          hero_metric: 5x platform utilization, 1M+ annual visits across 35K beds and all 50 states
+        - name: Enterprise Revenue Retention
+          url: ''
+          hero_metric: $11.2M retained, all top 10 accounts renewed (93% ARR)
+        - name: M&A Integration
+          url: ''
+          hero_metric: $6M ARR secured by consolidating 4 platforms across 2 acquisitions
+        - name: KLAS Awards
+          url: ''
+          hero_metric: Back-to-back KLAS awards, "Quality" and "Needed Functionality" 10% above industry average
+        - name: Vecchio (AI Healthcare Product Shipped)
+          url: vecchiovirtualcare.vercel.app
+          hero_metric: >-
+            End-to-end Virtual Care orchestration platform with AI woven through clinical workflow (SOAP auto-drafting,
+            ICD/CPT, clinical chat assist)
+    generic:
+      headline: Director-level product leader with 12+ years driving product vision across B2B SaaS and Fortune 50 enterprises
+      exit_story: >-
+        Director of Product at eVisit since 2020, where I drove 5x platform usage growth, retained $11.2M in enterprise
+        revenue, and managed a product org that grew from 4 to 17. Previously led product at J&J across Janssen, Medical
+        Devices, and Ethicon. Looking for my next Director or Head of Product role at growth-stage B2B or B2B2C SaaS
+        where AI is core to the product, operating as an AI-augmented PM who uses Claude to operate and build faster,
+        and to ship AI-native features into production.
+      superpowers:
+        - AI-augmented PM operating across the full product lifecycle
+        - Shipping AI-native features into production (Vecchio, Furniture Curator, Career-ops)
+        - Revenue retention and enterprise account management
+        - M&A product integration
+        - Cross-functional team leadership
+        - Data-driven product strategy in regulated, high-stakes environments
+      proof_points:
+        - name: eVisit Platform Growth
+          url: DavidGLovecchio.com
+          hero_metric: 5x platform usage, 1M+ annual sessions across enterprise customers in all 50 states
+        - name: Enterprise Revenue Retention
+          url: ''
+          hero_metric: $11.2M retained, all top 10 accounts renewed (93% ARR)
+        - name: M&A Integration
+          url: ''
+          hero_metric: $6M ARR secured by consolidating 4 platforms across 2 acquisitions
+        - name: Industry Recognition
+          url: ''
+          hero_metric: Back-to-back industry awards, quality and capability scores 10% above industry benchmarks
+        - name: AI Products Shipped
+          url: vecchiovirtualcare.vercel.app
+          hero_metric: >-
+            Three AI products shipped end-to-end (Vecchio, Furniture Curator, Career-ops) across regulated SaaS,
+            consumer, and developer-tooling contexts
 compensation:
   target_range: $180K–$230K
   currency: USD

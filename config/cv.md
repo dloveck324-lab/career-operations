@@ -6,7 +6,19 @@ Scottsdale, AZ 85251 | (610) 639-5799 | dloveck324@gmail.com | linkedin.com/in/d
 
 ## Professional Summary
 
-Strategic product leader and MBA with 10+ years driving product vision across SaaS and Fortune 50 healthcare (J&J). Track record of managing M&A integrations ($6M ARR), retaining $11.2M in enterprise revenue, and directly managing cross-functional product and engineering pods within a product org that grew from 4 to 17. Expert in building high-performing teams and delivering multi-million dollar revenue growth. Combines a technical foundation in Business IT with data-driven strategy across regulated environments. Applies Claude across the full product lifecycle — from discovery and prototyping through requirements and development — and works fluently across the broader AI tooling ecosystem.
+Director-level product leader with 12+ years across B2B SaaS and Fortune 50 enterprises, operating as an AI-augmented PM who uses Claude to operate and build faster, and to ship AI-native features. Track record of managing M&A integrations ($6M ARR), retaining $11.2M in enterprise revenue, and directly managing cross-functional product and engineering pods within a product org that grew from 4 to 17. Expert in building high-performing teams and delivering multi-million dollar revenue growth in complex, high-stakes environments. Applies Claude across discovery, prototyping, requirements, development, and release notes.
+
+---
+
+## Applied AI Projects
+
+- **Vecchio** ([vecchiovirtualcare.vercel.app](https://vecchiovirtualcare.vercel.app/demo.html), pw: vecchio2026): End-to-end SaaS product I built, with AI orchestration at its core: structured-output drafting, multi-step reasoning workflows, and embedded conversational agents.
+- **Furniture Curator** ([mycurator.lovable.app](https://mycurator.lovable.app/)): AI design engine I shipped on Lovable. Style profiling and generative instruction synthesis turn aesthetic preferences into personalized DIY furniture build plans.
+- **Career-ops** ([career-ops-demo.vercel.app](https://career-ops-demo.vercel.app/pipeline)): AI job search pipeline I built on Claude Code with multi-model orchestration (Haiku + Sonnet), skill-driven prompts, and a browser-control autofill agent with per-ATS adapters. 740+ jobs evaluated, 100+ tailored resumes generated.
+
+## Core Competencies
+
+Enterprise SaaS | Artificial Intelligence (AI) | Product Strategy | Roadmap Planning | Discovery & Validation | Go-to-Market (GTM) | M&A Integration | Revenue Retention & Growth | Platform Integrations | Compliance & Regulated Industries | Stakeholder Management | People Leadership | Pricing & Packaging
 
 ---
 
@@ -14,13 +26,13 @@ Strategic product leader and MBA with 10+ years driving product vision across Sa
 
 ### Director of Product | eVisit | August 2020 – Present
 
-- **Product Impact:** Spearheaded the product evolution that drove a 5x surge in platform utilization, successfully supporting 1M+ annual visits across a national footprint of 35K beds and all 50 states.
+- **Product Impact:** Drove 5x growth in platform usage, scaling to 1M+ annual sessions across enterprise customers in all 50 states.
+- **AI-Augmented Processes:** Applied Claude across market research, discovery, PRDs, and structured reasoning; cut interface prototyping from weeks to hours via Claude Design, v0, and Lovable; automated release-note workflows with Claude, n8n, and Zapier.
 - **Market Strategy:** Scaled sales pipeline by standardizing 4 products across a $132M SAM ($690M TAM), resulting in $3.8M in ARR and the successful rollout of a data analytics service offering generating $100K in new ARR.
 - **Merger & Acquisition Strategy:** Orchestrated the product integration of 4 platforms (2 acquisitions and 2 legacy solutions), consolidating disparate tech stacks to secure $6M in ARR and eliminate redundant operational overhead spend.
 - **Revenue Retention:** Prevented significant churn by recovering $9.5M in high-risk contracts, securing $11.2M in total retained revenue; successfully renewed all top 10 enterprise accounts representing 93% of company ARR.
-- **Growth & KLAS Success:** Secured back-to-back KLAS awards by directing launches that propelled "Quality" and "Needed Functionality" scores 10% above industry average, consistently outperforming core competitors.
-- **Telephony & Multi-Channel:** Built inbound and outbound telephony workflows across video, telephony, SMS, and email using Twilio's full product suite; designed seamless channel-switching for clinical and operational use cases.
-- **Discovery:** Conduct deep-dive research and usability studies to translate user pain points into validated product roadmaps.
+- **Growth & Industry Recognition:** Won back-to-back industry awards by directing launches that pushed quality and capability scores 10% above industry benchmarks.
+- **Telephony & Multi-Channel:** Built inbound and outbound telephony workflows across video, telephony, SMS, and email using Twilio's full product suite; generated pricing and packaging for GTM, new packaging led to $250K in new ARR.
 - **People Leadership:** Led cross-functional product and engineering pods within a product org that grew from 4 to 17 during tenure; managed and coached team members to promotion.
 
 ### MBA Digital Marketing Intern, Global Franchise | J&J Vision Care | Summer 2019
@@ -45,20 +57,11 @@ Strategic product leader and MBA with 10+ years driving product vision across Sa
 
 ---
 
-## Skills & Certifications
-
-- **AI & Automation:** Claude (PRDs, Discovery, Reasoning, Prototyping), Gemini, v0/Lovable (Rapid Interface Design), Zapier/n8n (Workflow Automation)
-- **Discovery & Data:** User Research (Dovetail/Fullstory), Design Thinking, SQL, Tableau, Pendo, Gainsight, Sisense
-- **Technical & Process:** API & Integrations, Business IT Infrastructure, Figma, Jira/Confluence, SDLC, Agile/Scrum, ClickUp
-- **Healthcare:** Acute and Ambulatory, Twilio (Video, Telephony, SMS, Email — inbound & outbound), Interpreter Integrations (APIs), EHR (Epic/Cerner), ePrescribe
-
----
-
 ## Leadership & Mentorship
 
 - **SaaS Product Mentor, Co.Lab (2023–2026):** Mentor cross-functional pods through 8-week 0-to-1 product cycles.
 - **Head Coach, NCBA Baseball (2019–2026):** Lead 75+ athletes.
-- **Recruiting Team Lead, Pennsylvania State University (2015–2017):** Directed 25-member team; secured 50+ full-time placements.
+- **Recruiting Team Lead, Penn State University (2015–2017):** Directed 25-member team; secured 50+ full-time placements.
 - **Co-Founder, PM Club:** Scaled org to 45+ students via industry workshops.
 
 ---
@@ -66,4 +69,12 @@ Strategic product leader and MBA with 10+ years driving product vision across Sa
 ## Education
 
 - **Master of Business Administration (MBA)** | Arizona State University
-- **B.S. Information Sciences and Technology** | Pennsylvania State University
+- **B.S. Information Sciences and Technology** | Penn State University
+
+---
+
+## Skills
+
+- **AI & Automation:** Claude (PRDs, Discovery, Reasoning, Prototyping, Release Notes); Claude Design & Code, v0, Lovable (UI Design); Claude Routines, Zapier, n8n (Workflow Automation)
+- **Discovery & Data:** Dovetail, Pendo, Fullstory (User Research & Behavior); Tableau, Sisense, Qlik, SQL (Analytics & BI); Gainsight (Customer Insights)
+- **Technical & Process:** Figma, Lucid, Miro (Design & Diagramming); Jira, Confluence, ClickUp (Project Management & Docs); SDLC, Agile/Scrum (Methodology)

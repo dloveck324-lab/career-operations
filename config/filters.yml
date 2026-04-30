@@ -1177,6 +1177,110 @@ portals:
     url: https://jobs.ashbyhq.com/nabla
     notes: AI ambient notes for clinicians. EU-founded, US expansion. Slug unverified.
     enabled: true
+  - name: Headspace Health
+    type: greenhouse
+    company_id: hs
+    url: https://job-boards.greenhouse.io/hs
+    notes: Mental health + mindfulness platform. Merged with Ginger. B2B and consumer.
+    enabled: true
+  - name: Talkspace
+    type: greenhouse
+    company_id: talkspace
+    url: https://job-boards.greenhouse.io/talkspace
+    notes: Telehealth therapy platform. Public. Primarily clinical hiring but has product/tech roles.
+    enabled: true
+  - name: Lyra Health
+    type: lever
+    company_id: lyrahealth
+    url: https://jobs.lever.co/lyrahealth
+    notes: Employer-sponsored mental health benefits. Series F unicorn. Strong product org.
+    enabled: true
+  - name: Grow Therapy
+    type: greenhouse
+    company_id: growtherapy
+    url: https://job-boards.greenhouse.io/growtherapy
+    notes: Therapist marketplace. $178M raised (Sequoia, TCV). NYC/SF/Seattle hubs.
+    enabled: true
+  - name: LifeStance Health
+    type: lever
+    company_id: lifestance
+    url: https://jobs.lever.co/lifestance
+    notes: Outpatient mental health. Public company. Mostly clinical hiring — watch for product/ops roles.
+    enabled: true
+  - name: Array Behavioral Care
+    type: ashby
+    company_id: array-behavioral-care
+    url: https://jobs.ashbyhq.com/array-behavioral-care
+    notes: Virtual psychiatry and therapy. Focus on health system partnerships and telepsychiatry.
+    enabled: true
+  - name: Valera Health
+    type: greenhouse
+    company_id: valerahealth
+    url: https://job-boards.greenhouse.io/valerahealth
+    notes: Tele-mental health. Suicide prevention focus. Product and data roles posted occasionally.
+    enabled: true
+  - name: Talkiatry
+    type: lever
+    company_id: talkiatry
+    url: https://jobs.lever.co/talkiatry
+    notes: Psychiatry-first telehealth. In-network insurance. Founded 2020. Primarily clinical but growing ops/tech.
+    enabled: true
+  - name: Charlie Health
+    type: greenhouse
+    company_id: charliehealth
+    url: https://job-boards.greenhouse.io/charliehealth
+    notes: Virtual IOP for teens and young adults. Fast-growing. Product and clinical ops roles.
+    enabled: true
+  - name: Brave Health
+    type: ashby
+    company_id: bravehealth
+    url: https://jobs.ashbyhq.com/bravehealth
+    notes: Mental health for Medicaid populations. Remote-first. Mission-driven.
+    enabled: true
+  - name: Two Chairs
+    type: greenhouse
+    company_id: twochairs
+    url: https://job-boards.greenhouse.io/twochairs
+    notes: Therapist matching and hybrid mental health care. Strong product/clinical ops culture.
+    enabled: true
+  - name: SonderMind
+    type: greenhouse
+    company_id: sondermind
+    url: https://job-boards.greenhouse.io/sondermind
+    notes: Mental health platform. Denver + remote. AI-powered therapy tools. Has Staff AI Engineer roles.
+    enabled: true
+  - name: Mindful Care
+    type: custom
+    company_id: ''
+    url: https://www.mindful.care/careers
+    notes: Same-day urgent psychiatric care. NY-focused. Custom careers page — check manually.
+    enabled: false
+  - name: Thriveworks
+    type: custom
+    company_id: ''
+    url: https://thriveworks.wd5.myworkdayjobs.com/Thriveworks
+    notes: 340+ locations. Workday ATS — scanner won't reach. Mostly clinical. Check manually for product/ops.
+    enabled: false
+  - name: Iris Telehealth
+    type: custom
+    company_id: ''
+    url: https://iristelehealth.com/careers/corporate-careers/
+    notes: Telepsychiatry for health systems. Trakstar ATS — scanner won't reach. Corporate roles separate from clinical.
+    enabled: false
+  - name: ComPsych
+    type: custom
+    company_id: ''
+    url: https://www.compsych.com/careers/
+    notes: EAP and behavioral health leader. Chicago HQ + remote. Custom careers page — check manually.
+    enabled: false
+  - name: TELUS Health MyCare
+    type: lever
+    company_id: telushealthmycare
+    url: https://jobs.lever.co/telushealthmycare
+    notes: >-
+      Canadian digital health (TELUS Corp). Mostly Canadian clinical provider roles. Low relevance unless targeting
+      Canada.
+    enabled: false
 title_filter:
   positive:
     - AI
@@ -1193,7 +1297,6 @@ title_filter:
     - Conversational AI
     - Speech
     - KI
-    - Künstliche Intelligenz
     - KI Engineer
     - KI Trainer
     - Dozent
@@ -1204,7 +1307,6 @@ title_filter:
     - Forward Deployed
     - Deployed Engineer
     - Customer Engineer
-    - Integration Engineer
     - Product Manager
     - Technical PM
     - Automation
