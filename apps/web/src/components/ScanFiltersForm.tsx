@@ -60,7 +60,6 @@ export function ScanFiltersForm() {
   const [filtersRaw, setFiltersRaw] = useState<FiltersFile>({})
 
   const [prescreen, setPrescreen] = useState<Prescreen>(EMPTY_PRESCREEN)
-  const [fullProfile, setFullProfile] = useState<Profile | null>(null)
 
   const [newArchSlug, setNewArchSlug] = useState('')
 
@@ -73,8 +72,11 @@ export function ScanFiltersForm() {
         title_filter: { positive: titlePositive, negative: titleNegative },
         location_blocklist: locationBlocklist,
       }),
+      // Send ONLY the section this form owns. Backend shallow-merges so other
+      // top-level keys (candidate, narrative, compensation, location) are
+      // preserved — prevents cross-tab clobbering when user edits Profile +
+      // Scan tabs in the same session.
       api.settings.saveProfile({
-        ...(fullProfile ?? {}),
         prescreen: { ...prescreen, blocklist_titles: [] },
       }),
     ])
@@ -101,7 +103,6 @@ export function ScanFiltersForm() {
       let ps = EMPTY_PRESCREEN
       if (profileData) {
         const p = profileData as Profile
-        setFullProfile(p)
         const raw = p.prescreen as Partial<Prescreen> | undefined
         ps = {
           seniority_min: raw?.seniority_min ?? EMPTY_PRESCREEN.seniority_min,

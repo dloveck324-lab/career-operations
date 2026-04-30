@@ -267,7 +267,17 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   app.put('/settings/profile', async (req) => {
     const body = req.body as Record<string, unknown>
-    writeFileSync(configPath('profile.yml'), yaml.dump(body, { lineWidth: 120 }))
+    // Shallow-merge with the on-disk profile: top-level keys present in `body`
+    // replace their counterparts; keys absent from `body` are preserved.
+    // Without this, two tabs (e.g. Profile + Scan) racing to save partial
+    // profiles would overwrite each other's sections. See the SaveBar/auto-
+    // save flow in apps/web/src/components/{ProfileForm,ScanFiltersForm}.tsx.
+    const path = configPath('profile.yml')
+    const existing = existsSync(path)
+      ? ((yaml.load(readFileSync(path, 'utf-8')) as Record<string, unknown> | null) ?? {})
+      : {}
+    const merged = { ...existing, ...body }
+    writeFileSync(path, yaml.dump(merged, { lineWidth: 120 }))
     // Sync contact fields → cv.md
     try {
       const cvPath = configPath('cv.md')
