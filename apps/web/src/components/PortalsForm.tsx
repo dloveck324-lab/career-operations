@@ -294,6 +294,9 @@ export function PortalsForm() {
             variant="outlined" sx={{ fontSize: '0.7rem' }} />
         ))}
         <Box sx={{ flex: 1 }} />
+        <Button size="small" variant="outlined" startIcon={<Add />} onClick={add}>
+          Add portal
+        </Button>
         <Button size="small" variant="outlined" startIcon={<FileUpload />} onClick={() => setImportOpen(true)}>
           Import
         </Button>
@@ -302,7 +305,7 @@ export function PortalsForm() {
         </Button>
       </Stack>
 
-      <Box sx={{ height: 500 }}>
+      <Box sx={{ height: 600 }}>
         <DataGrid
           rows={rows}
           columns={columns}
@@ -311,7 +314,10 @@ export function PortalsForm() {
           density="compact"
           disableRowSelectionOnClick
           getRowClassName={({ row }) => row.enabled ? '' : 'row-disabled'}
-          initialState={{ sorting: { sortModel: [{ field: 'name', sort: 'asc' }] } }}
+          initialState={{
+            sorting: { sortModel: [{ field: 'name', sort: 'asc' }] },
+            pagination: { paginationModel: { pageSize: 50, page: 0 } },
+          }}
           pageSizeOptions={[25, 50, 100]}
           sx={{
             border: '1px solid',
@@ -321,13 +327,6 @@ export function PortalsForm() {
             '& .MuiDataGrid-cell': { borderColor: 'divider' },
             '& .row-disabled': { opacity: 0.4 },
             '& .MuiDataGrid-cell--editable:hover': { bgcolor: 'action.hover', cursor: 'text' },
-          }}
-          slots={{
-            footer: () => (
-              <Box sx={{ px: 1, py: 0.5, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Button size="small" startIcon={<Add />} onClick={add}>Add portal</Button>
-              </Box>
-            ),
           }}
         />
       </Box>
