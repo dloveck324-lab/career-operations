@@ -54,6 +54,7 @@ export function useGridState(
     return defaultFilter
   })
 
+  // Re-hydrate if the key changes (e.g. switching pipeline tabs)
   useEffect(() => {
     try {
       const s = localStorage.getItem(`grid:${storageKey}:sort`)
