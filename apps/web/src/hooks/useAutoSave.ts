@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
+/**
+ * Debounced auto-save hook.
+ *
+ * Usage:
+ *   const { saving, saved, error, setBaseline } = useAutoSave(formData, saveFn)
+ *
+ * Call `setBaseline(loadedData)` inside your data-load effect AFTER setting
+ * state. This tells the hook "this is what was last saved" so it won't fire
+ * on the initial load.
+ */
 export function useAutoSave<T>(
   data: T,
   saveFn: () => Promise<void>,
@@ -17,6 +27,7 @@ export function useAutoSave<T>(
   const baselineRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Always keep a ref to the latest saveFn so the debounced callback is never stale
   const saveFnRef = useRef(saveFn)
   useEffect(() => { saveFnRef.current = saveFn })
 
@@ -27,7 +38,11 @@ export function useAutoSave<T>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const serialized = JSON.stringify(data)
+
+    // No baseline yet — data hasn't loaded from the server. Skip.
     if (baselineRef.current === null) return
+
+    // Nothing changed since last save. Skip.
     if (serialized === baselineRef.current) return
 
     clearTimeout(timerRef.current)
