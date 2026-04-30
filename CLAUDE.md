@@ -1,18 +1,39 @@
 # Job Pipeline — Agent Instructions
 
-## Branch Targeting — Required Process
+## Branch Targeting — Required Process (HARD RULE)
 
-Before implementing ANY code change, Claude MUST ask:
+> **Stop and ask before EVERY code or config change. No exceptions.**
+
+The two branches are intended to be **the same product** with one delta: demo-mode replaces AI features and live data with hardcoded fixtures. Anything else (UI, plumbing, bug fixes, tests, hooks, types) belongs on **both** branches and must stay in sync. Drift between the branches is a defect, not a feature.
+
+Before any edit, Claude MUST ask the user:
 
 > "Should this change go to **career-ops-dave** only, **demo-mode** only, or **both**?"
 
-Rules:
-- **Both** — UI/UX changes, new features, bug fixes that affect all users
-- **career-ops-dave only** — auth, Render/deployment config, personal data handling
-- **demo-mode only** — demo seed data, waitlist, public-facing copy
+### Rules
 
-After the user answers, apply changes to the target branch(es) and commit to each separately.
-Never apply a change to a branch without explicit confirmation from this check.
+- **Both (default for almost everything)** — UI/UX changes, new shared features, bug fixes, refactors, dependency updates, tests, hooks, types, schema migrations, generic backend logic.
+- **career-ops-dave only** — Personal config (`config/profile.yml`, `config/cv.md`, personal `filters.yml` entries), Render/deployment config tied to David's deployment, AI-feature plumbing that has no demo counterpart yet.
+- **demo-mode only** — Demo seed data, waitlist forms, public-facing landing copy, demo-only feature flags.
+
+### Anti-patterns (do NOT do these)
+
+- "I'll do it on dave first and mirror later." — Mirror with the SAME planning step. If it's a shared change, plan both targets up front.
+- "It's just a small fix" — small fixes drift the branches faster than big ones because nobody reviews the inconsistency.
+- "It only touches a UI component, demo probably doesn't have that file" — check before assuming. If demo lacks the file, that's a divergence to flag, not silently extend.
+- Cherry-picking after the fact and resolving conflicts case-by-case. Each conflict resolution is a chance to encode new divergence; if conflicts are non-trivial, stop and ask the user how to converge.
+
+### Feature flags (future)
+
+When a feature should be visible in dave but stubbed/hidden in demo (e.g. AI-evaluator panels, autofill agent), prefer **runtime feature flags** over branch-level differences. Flag config: `apps/web/src/config/features.ts` (or equivalent). Demo branch sets the flag off; dave sets it on. Both branches still ship the same code.
+
+When you propose a flag, name the flag, the default in each branch, and which file gates the behavior.
+
+### Workflow after the user answers
+
+1. Apply changes on each target branch in turn (use `git worktree add` for the second branch so the running dev server isn't disrupted).
+2. Commit to each branch separately with the SAME commit message text (different SHAs are fine).
+3. If a cherry-pick produces non-trivial conflicts, **stop and surface the divergence to the user** — that's the symptom of a bigger problem the rule can't solve alone.
 
 ---
 
