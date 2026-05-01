@@ -251,6 +251,8 @@ These run on every meaningful feature, bugfix, or refactor. Claude does them pro
 
 ### 1. Commits — Conventional Commits, one per delivery
 
+**Before cutting a feature branch from `main`:** run `git fetch && git status` and confirm `main` is in sync with `origin/main`. If `main` is behind, pull first; if ahead, the prior work hasn't been pushed yet — finish that PR before starting new work. The `.claude/hooks/git-sync-main.sh` SessionStart hook already does this on every session boot, but verify before branching anyway — sessions can be long.
+
 Each delivery = one commit. Never bundle unrelated changes.
 
 **Format:** `type(scope): summary` — under 72 chars on the subject line, body wrapped at ~72.
