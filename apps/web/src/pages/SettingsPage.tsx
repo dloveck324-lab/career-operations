@@ -6,16 +6,29 @@ import {
   ToggleButtonGroup, ToggleButton, Alert,
 } from '@mui/material'
 import { Delete, CheckCircle, Error, AlarmOn, ArrowBack, Save } from '@mui/icons-material'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type AutomationConfig, type AutomationStatus } from '../api.js'
 import { ProfileForm } from '../components/ProfileForm.js'
 import { PortalsForm } from '../components/PortalsForm.js'
 import { ScanFiltersForm } from '../components/ScanFiltersForm.js'
 import { CvForm } from '../components/CvForm.js'
+import { useProfileCompleteness } from '../hooks/useProfileCompleteness.js'
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState(0)
+  const [params] = useSearchParams()
+  // Honor ?tab=N from PipelinePage gear navigation. Clamp to valid range so
+  // a stale or hand-typed URL can't crash the tab renderer.
+  const initialTab = (() => {
+    const t = Number(params.get('tab') ?? '0')
+    return Number.isFinite(t) && t >= 0 && t <= 5 ? t : 0
+  })()
+  const [tab, setTab] = useState(initialTab)
+  const completeness = useProfileCompleteness()
+  const tabHasIncomplete = (i: number) => (completeness.incompleteByTab[i]?.length ?? 0) > 0
+  const tabTooltip = (i: number) => completeness.incompleteByTab[i]?.length
+    ? `Missing: ${completeness.incompleteByTab[i].join(', ')}`
+    : ''
   const [status, setStatus] = useState<{
     pinchtab: { ok: boolean; message?: string }
     claude: { ok: boolean; path?: string; message?: string }
@@ -47,9 +60,9 @@ export function SettingsPage() {
           allowScrollButtonsMobile
           sx={{ borderBottom: '1px solid', borderColor: 'divider', px: { xs: 1, sm: 2 } }}
         >
-          <Tab label="CV" />
-          <Tab label="Profile" />
-          <Tab label="Scan" />
+          <Tab label={<TabLabel name="CV" incomplete={tabHasIncomplete(0)} hint={tabTooltip(0)} />} />
+          <Tab label={<TabLabel name="Profile" incomplete={tabHasIncomplete(1)} hint={tabTooltip(1)} />} />
+          <Tab label={<TabLabel name="Scan" incomplete={tabHasIncomplete(2)} hint={tabTooltip(2)} />} />
           <Tab label="Portals" />
           <Tab label="Field Mappings" />
           <Tab label="Automation" icon={<AlarmOn sx={{ fontSize: 16 }} />} iconPosition="start" />
@@ -65,6 +78,23 @@ export function SettingsPage() {
         </Box>
       </Paper>
     </Box>
+  )
+}
+
+/**
+ * Tab label with an optional dot indicator. Used for tabs that have
+ * incomplete required fields. Wrapping the dot in a Tooltip lets the
+ * user discover *which* fields are missing without leaving the tab.
+ */
+function TabLabel({ name, incomplete, hint }: { name: string; incomplete: boolean; hint: string }) {
+  if (!incomplete) return <>{name}</>
+  return (
+    <Tooltip title={hint} placement="top">
+      <Stack direction="row" spacing={0.75} alignItems="center" justifyContent="center">
+        <span>{name}</span>
+        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'warning.main' }} />
+      </Stack>
+    </Tooltip>
   )
 }
 
