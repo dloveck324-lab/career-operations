@@ -245,19 +245,83 @@ node scripts/represcreen.mjs             # apply
 
 **Never bypass the skill.** If you need to change autofill behavior, edit `.claude/skills/autofiller/SKILL.md`, the relevant `ats/*.md`, or `uploads.md` / `dialogs.md`. Do NOT move logic into `autofill.ts` — the skill is the source of truth for agent behavior.
 
-## Commit & Version Bump — Required Rule
+## Workflow Rules
 
-**When completing any meaningful feature, bugfix, or refactor, Claude MUST proactively:**
+These run on every meaningful feature, bugfix, or refactor. Claude does them proactively — never asks whether to commit, version-bump, or write tests.
 
-1. **Version bump** in the root `package.json`:
-   - patch (`x.x.N`) for bugfix/refactor/change
-   - minor (`x.N.0`) for new feature
-   - major (`N.0.0`) only if breaking the existing API
-2. **Commit** with all relevant changes:
-   ```
-   git add <modified files>
-   git commit -m "type: concise description"
-   ```
-3. **Auto-push** to `origin/main` after the commit.
+### 1. Commits — Conventional Commits, one per delivery
 
-**Never ask whether to commit.** Do it automatically at the end of each feature/fix. Never bundle multiple features in the same commit. Each delivery = one commit.
+Each delivery = one commit. Never bundle unrelated changes.
+
+**Format:** `type(scope): summary` — under 72 chars on the subject line, body wrapped at ~72.
+
+| Type | Use for |
+|---|---|
+| `feat` | New user-visible capability |
+| `fix` | Bugfix |
+| `refactor` | Internal restructure with no behavior change |
+| `perf` | Measurable performance improvement |
+| `test` | Adding or fixing tests only |
+| `docs` | Docs / comments only |
+| `chore` | Build, deps, tooling, config |
+| `revert` | Reverts an earlier commit |
+
+**Body should explain *why*, not what.** The diff already shows what. Reference the user-facing behavior, the regression being prevented, or the constraint being honored. Co-author trailer required:
+
+```
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+```
+
+**Stage explicit paths** — `git add path/to/file.ts`, never `git add -A` or `git add .` (avoids accidentally committing `.env`, `config/profile.yml`, or stray local artifacts).
+
+**Pushing requires explicit user approval.** Commit locally; let the user run `git push` (or ask for permission first). Never `--force-push`. Never `--no-verify`.
+
+### 2. Version bumps — SemVer, in the root `package.json`
+
+Bump on the same commit as the change:
+
+| Bump | When |
+|---|---|
+| **major** (`N.0.0`) | Breaking change to a public API, route, DB schema, or config schema |
+| **minor** (`x.N.0`) | New feature, new endpoint, new config knob, new UI surface |
+| **patch** (`x.x.N`) | Bugfix, refactor, perf, docs, chore — anything backwards-compatible and invisible to consumers |
+
+Pre-1.0 (current state): treat the **minor** as the de-facto major — bump it for any user-visible change, reserve patch for invisible work. Don't reset patch to 0 mid-stream just because you bumped minor in the same commit; let the file diff speak for itself.
+
+### 3. Unit tests — write alongside new logic
+
+When you add or change code with branchable behavior — new utility, new prescreen rule, new parser, new query — add a `*.test.ts` next to it under the existing `__tests__/` directories (`apps/server/src/__tests__/`, `packages/core/src/__tests__/`). Use Vitest (`npm run test`).
+
+A unit test belongs when there is **logic worth pinning**: a pure function, a parser, a state machine, a query that filters/sorts. Skip tests for thin glue (`fetch → setState`, trivial passthroughs) — the cost-to-coverage ratio isn't there.
+
+The test must fail without the change. Cover the happy path plus one edge case (empty input, malformed input, boundary value). Do NOT mock the database in queries tests — use a real in-memory SQLite (the existing tests already do this).
+
+### 4. Functional tests — guard the cross-module flows
+
+When you ship a feature that spans modules (route → query → SSE → UI; or scan → prescreen → eval), add an end-to-end test that exercises the whole path. These live alongside unit tests and use Vitest's `describe`/`it`.
+
+Trigger checklist for a functional test:
+- A new route was added or its contract changed.
+- A new SSE event type was added.
+- The job-status state machine gained a transition.
+- The autofill skill or evaluator prompt changed shape.
+- A migration changed a tracked column.
+
+Run `npm run test` before committing. A red bar blocks the commit; fix the underlying cause, never `--no-verify`.
+
+### 5. Personal data — never commit, never log
+
+The following paths contain real-user PII and **must never appear in a commit, screenshot, log line, or test fixture**:
+
+- `config/profile.yml` (real user) — only `config/profile.example.yml` is committed.
+- `config/cv.md` (real user) — only `config/cv.example.md` is committed.
+- `config/cv.pdf`, `config/resume.pdf`.
+- `config/filters.yml` (user's target-company list — preference data) — only `config/filters.example.yml` is committed.
+- `data/jobs.db` and its `-shm` / `-wal` siblings.
+- Anything under `.env*` except `.env.example`.
+
+**Before every `git add`:** if the path is in `config/` or `data/`, double-check it's not the real user's file. The `.gitignore` enforces this, but `git add -f` and `git commit -a` bypass it — never use those flags on these paths.
+
+**In test fixtures, screenshots, and example output:** use the placeholder values from the `.example` files (`Your Name`, `you@example.com`, `linkedin.com/in/your-profile`). Never paste real names, emails, phone numbers, or company contacts.
+
+**If you suspect a leak shipped:** stop, tell the user, and let them decide on remediation (history rewrite vs. rotate-and-move-on). Don't take destructive history actions unprompted.

@@ -2,7 +2,7 @@ import { Fab, Tooltip, Typography, Stack } from '@mui/material'
 import { Save, CheckCircle, ErrorOutline } from '@mui/icons-material'
 import { CircularProgress } from '@mui/material'
 
-interface Props { onSave: () => void; saving?: boolean; saved?: boolean; error?: string | null }
+interface Props { onSave?: () => void; saving?: boolean; saved?: boolean; error?: string | null }
 
 export function SaveBar({ onSave, saving, saved, error }: Props) {
   const icon = saving

@@ -1,13 +1,21 @@
 import type { FastifyInstance } from 'fastify'
 import multipart from '@fastify/multipart'
 import { spawn } from 'child_process'
+import { writeFileSync, mkdirSync } from 'fs'
+import { resolve } from 'path'
 
-let pdfParse: ((buf: Buffer) => Promise<{ text: string }>) | null = null
-async function getPdfParse() {
-  if (pdfParse) return pdfParse
-  const mod = await import('pdf-parse')
-  pdfParse = (mod.default ?? mod) as (buf: Buffer) => Promise<{ text: string }>
-  return pdfParse
+const CONFIG_DIR = resolve(process.cwd(), '../../config')
+
+// pdf-parse v2 dropped the v1 default-function export in favour of a class.
+async function parsePdfBuffer(buf: Buffer): Promise<{ text: string }> {
+  const { PDFParse } = await import('pdf-parse')
+  const parser = new PDFParse({ data: new Uint8Array(buf) })
+  try {
+    const result = await parser.getText()
+    return { text: (result as { text: string }).text }
+  } finally {
+    await parser.destroy().catch(() => {})
+  }
 }
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6'
@@ -106,11 +114,12 @@ export async function cvUploadRoutes(app: FastifyInstance) {
     const buf = Buffer.concat(chunks)
 
     let text = ''
+    let isPdf = false
     try {
       if (mimeType === 'application/pdf' || filename.toLowerCase().endsWith('.pdf')) {
-        const parse = await getPdfParse()
-        const result = await parse(buf)
+        const result = await parsePdfBuffer(buf)
         text = result.text
+        isPdf = true
       } else if (
         mimeType === 'text/plain' ||
         filename.toLowerCase().endsWith('.txt') ||
@@ -136,6 +145,13 @@ export async function cvUploadRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: `Resume parsing failed: ${err instanceof Error ? err.message : String(err)}` })
     }
 
-    return { ok: true, cv: parsed }
+    if (isPdf) {
+      try {
+        mkdirSync(CONFIG_DIR, { recursive: true })
+        writeFileSync(resolve(CONFIG_DIR, 'cv.pdf'), buf)
+      } catch { /* non-fatal — autofill will fall back if PDF missing */ }
+    }
+
+    return { ok: true, cv: parsed, pdfSaved: isPdf }
   })
 }

@@ -1,9 +1,29 @@
 node_modules/
+dist/
+apps/web/dist/
+apps/server/dist/
+
+# Local SQLite — never committed
 data/*.db
 data/*.db-shm
 data/*.db-wal
-dist/
+
+# Environment / secrets
 .env
-.env.local
-apps/web/dist/
-apps/server/dist/
+.env.*
+!.env.example
+
+# Personal data — only the *.example.* templates are committed.
+# See CLAUDE.md → Workflow Rules → Personal data.
+config/profile.yml
+config/cv.md
+config/cv.pdf
+config/resume.pdf
+config/filters.yml
+config/*.local.*
+
+# OS / editor cruft
+.DS_Store
+*.log
+.vscode/
+.idea/
