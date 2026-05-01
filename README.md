@@ -15,7 +15,7 @@ A local-first web dashboard for managing a job search pipeline. Scan job boards,
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd "Dave Search Job App"
+cd career-operations
 
 # Install all workspace dependencies
 npm install
@@ -49,10 +49,10 @@ Open `http://localhost:5173` and go to **Settings**.
 
 You have two options:
 
-**Option A — Auto-import** (if you have a `Dave's job search/` folder next to this project):
-- Go to **Settings → Import** and click **Import from Dave's job search**
+**Option A — Auto-import** (if you have an existing job search config folder):
+- Go to **Settings → Import** and point it at your source folder
+- Set `IMPORT_SOURCE=/path/to/folder` before starting the server, then click **Import**
 - This populates `config/profile.yml`, `config/filters.yml`, and `config/cv.md` automatically
-- If your source folder is in a different location, set `IMPORT_SOURCE=/path/to/folder` before starting the server
 
 **Option B — Manual setup**:
 - **Settings → Profile**: fill in your name, target roles, location, and compensation range

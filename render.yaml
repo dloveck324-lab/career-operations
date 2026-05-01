@@ -1,33 +1,33 @@
 # =============================================================================
-# render.yaml — deploy config for career-ops-dave (Dave's personal instance)
+# render.yaml — deploy config for career-operations
 #
 # Env vars to set in Render dashboard after first deploy:
 #   GOOGLE_CLIENT_ID      — from Google Cloud Console OAuth app
 #   GOOGLE_CLIENT_SECRET  — from Google Cloud Console OAuth app
 #   ALLOWED_EMAIL         — your Gmail address (only account that can sign in)
 #   COOKIE_SECRET         — random secret: openssl rand -hex 32
-#   ALLOWED_ORIGIN        — https://career-ops-dave.vercel.app
+#   ALLOWED_ORIGIN        — https://your-app.vercel.app
 #   DB_UPLOAD_KEY         — temp key for initial data migration (remove after)
 # =============================================================================
 
 services:
   - type: web
-    name: career-ops-dave-api
+    name: career-operations-api
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: starter
-    branch: career-ops-dave
+    branch: main
     autoDeploy: true
     healthCheckPath: /api/health
     disk:
-      name: career-ops-dave-data
+      name: career-operations-data
       mountPath: /app/persistent
       sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: ALLOWED_ORIGIN
-        value: https://career-ops-dave.vercel.app
+        value: https://your-app.vercel.app
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
