@@ -75,6 +75,23 @@ function serializeCv(d: ParsedCv): string {
 
 const portalKey = (p: Portal) => `${p.type}:${p.company_id}`
 
+/**
+ * Saves a profile patch without clobbering nested fields the patch doesn't
+ * mention. The server's PUT /settings/profile does shallow merge at the top
+ * level only — `body.candidate` replaces the full candidate object — so
+ * sending {candidate: {work_authorization}} would wipe full_name, email,
+ * etc. that the resume step had populated. This helper fetches current
+ * profile and shallow-merges each top-level key before saving.
+ */
+async function patchProfile(patch: Record<string, Record<string, unknown>>) {
+  const current = (await api.settings.profile().catch(() => null)) as Record<string, Record<string, unknown>> | null
+  const merged: Record<string, Record<string, unknown>> = {}
+  for (const [key, value] of Object.entries(patch)) {
+    merged[key] = { ...(current?.[key] ?? {}), ...value }
+  }
+  await api.settings.saveProfile(merged)
+}
+
 export function OnboardingPage() {
   const navigate = useNavigate()
   const { step: stepParam } = useParams<{ step: string }>()
@@ -319,8 +336,8 @@ function ResumeStep({ parsed, setParsed, onNext, onSkip }: ResumeStepProps) {
     setSavingNext(true)
     try {
       await api.settings.saveCv(serializeCv(parsed))
-      const c = parsed.contact ?? {}
-      await api.settings.saveProfile({
+      const c = parsed.contact ?? {} as Partial<ParsedCv['contact']>
+      await patchProfile({
         candidate: {
           full_name: c.name ?? '',
           email: c.email ?? '',
@@ -417,7 +434,7 @@ function ProfileStep({
   const save = async () => {
     setSaving(true); setError(null)
     try {
-      await api.settings.saveProfile({
+      await patchProfile({
         target_roles: { primary, archetypes: primary.map(name => ({ name, level: 'Senior', fit: 'primary' })) },
         compensation: { target_range: targetRange, currency: 'USD', minimum, location_flexibility: locationFlex },
         candidate: { work_authorization: workAuth, requires_sponsorship: sponsorship },
