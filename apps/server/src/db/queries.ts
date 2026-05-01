@@ -169,7 +169,11 @@ function seedFieldMappingsFromProfileVariant(profile: ProfileConfig, variant: Fm
     years_of_experience?: string
     how_did_you_hear?: string
   }
-  const nameParts = p.full_name.trim().split(/\s+/)
+  // Defensive: a partial candidate block (e.g. mid-onboarding before the
+  // resume step has run) must not crash boot. Default missing strings to '';
+  // mappings just won't seed for empty answers.
+  const fullName = (p.full_name ?? '').trim()
+  const nameParts = fullName.split(/\s+/)
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts.slice(1).join(' ')
 
@@ -178,10 +182,10 @@ function seedFieldMappingsFromProfileVariant(profile: ProfileConfig, variant: Fm
   const needsSponsorship = p.requires_sponsorship ?? 'No'
 
   const mappings: Array<[string, string]> = [
-    ['Full Name', p.full_name],
-    ['Name', p.full_name],
-    ['Your Name', p.full_name],
-    ['Applicant Name', p.full_name],
+    ['Full Name', fullName],
+    ['Name', fullName],
+    ['Your Name', fullName],
+    ['Applicant Name', fullName],
     ['First Name', firstName],
     ['Last Name', lastName],
     ['Email', p.email],
