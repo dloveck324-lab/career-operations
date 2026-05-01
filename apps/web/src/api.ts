@@ -12,6 +12,17 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/**
+ * Broadcast that profile/filters/cv changed. The useProfileCompleteness
+ * hook listens for this and refetches so the topbar gear badge updates
+ * without a page reload after the user saves a Settings form.
+ */
+function broadcastProfileChange() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('profile-data-changed'))
+  }
+}
+
 export type JobStatus = 'scanned' | 'prescreened' | 'evaluated' | 'ready_to_submit' | 'applied' | 'interview' | 'completed' | 'skipped'
 
 export type IndustryVertical = 'healthcare' | 'generic' | 'ambiguous' | 'unclassified'
@@ -121,9 +132,17 @@ export const api = {
   settings: {
     status: () => req<{ config: unknown; pinchtab: { ok: boolean; message?: string }; claude: { ok: boolean; path?: string; message?: string } }>('/settings/status'),
     profile: () => req<unknown>('/settings/profile'),
-    saveProfile: (data: unknown) => req<{ ok: boolean }>('/settings/profile', { method: 'PUT', body: JSON.stringify(data) }),
+    saveProfile: async (data: unknown) => {
+      const r = await req<{ ok: boolean }>('/settings/profile', { method: 'PUT', body: JSON.stringify(data) })
+      broadcastProfileChange()
+      return r
+    },
     filters: () => req<unknown>('/settings/filters'),
-    saveFilters: (data: unknown) => req<{ ok: boolean }>('/settings/filters', { method: 'PUT', body: JSON.stringify(data) }),
+    saveFilters: async (data: unknown) => {
+      const r = await req<{ ok: boolean }>('/settings/filters', { method: 'PUT', body: JSON.stringify(data) })
+      broadcastProfileChange()
+      return r
+    },
     importPortals: (text: string, format: 'yaml' | 'json' = 'yaml') =>
       req<{
         added: number
@@ -140,7 +159,11 @@ export const api = {
         body: JSON.stringify({ text, format }),
       }),
     cv: () => req<{ content: string | null }>('/settings/cv'),
-    saveCv: (content: string) => req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) }),
+    saveCv: async (content: string) => {
+      const r = await req<{ ok: boolean }>('/settings/cv', { method: 'PUT', body: JSON.stringify({ content }) })
+      broadcastProfileChange()
+      return r
+    },
     uploadResume: (file: File) => {
       const form = new FormData()
       form.append('file', file)

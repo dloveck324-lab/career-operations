@@ -22,6 +22,7 @@ import { DirectionalScoreChip } from '../components/DirectionalScoreChip.js'
 import { IndustryBadge } from '../components/IndustryBadge.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
 import { useGridState } from '../hooks/useGridState.js'
+import { useProfileCompleteness } from '../hooks/useProfileCompleteness.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
 import { useAssistant } from '../contexts/AssistantContext.js'
 
@@ -348,6 +349,15 @@ export function PipelinePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
+  const completeness = useProfileCompleteness()
+  // Click target for the Settings gear: if anything is incomplete, jump
+  // straight to that tab; otherwise toggle between /pipeline and /settings.
+  const settingsTarget = () => {
+    if (location.pathname === '/settings') return '/pipeline'
+    return completeness.firstIncompleteTab !== null
+      ? `/settings?tab=${completeness.firstIncompleteTab}`
+      : '/settings'
+  }
   const assistant = useAssistant()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -805,8 +815,11 @@ export function PipelinePage() {
                     )
                   })}
                   <Divider />
-                  <MenuItem onClick={() => { navigate(location.pathname === '/settings' ? '/pipeline' : '/settings'); setMoreMenuAnchor(null) }} sx={{ gap: 1.5 }}>
-                    <Settings fontSize="small" sx={{ color: 'text.secondary' }} /> Settings
+                  <MenuItem onClick={() => { navigate(settingsTarget()); setMoreMenuAnchor(null) }} sx={{ gap: 1.5 }}>
+                    <Badge color="warning" variant="dot" invisible={completeness.isComplete} overlap="circular">
+                      <Settings fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Badge>
+                    Settings
                   </MenuItem>
                 </Menu>
               </>
@@ -845,13 +858,17 @@ export function PipelinePage() {
 
                 <ClaudeUsageDonut usage={claudeUsage} />
 
-                <Tooltip title="Settings">
+                <Tooltip title={completeness.isComplete
+                  ? 'Settings'
+                  : `Settings — ${completeness.incomplete.length} field${completeness.incomplete.length === 1 ? '' : 's'} to fill out`}>
                   <IconButton
                     size="small"
-                    onClick={() => navigate(location.pathname === '/settings' ? '/pipeline' : '/settings')}
+                    onClick={() => navigate(settingsTarget())}
                     sx={{ color: location.pathname === '/settings' ? 'primary.main' : 'text.secondary' }}
                   >
-                    <Settings fontSize="small" />
+                    <Badge color="warning" variant="dot" invisible={completeness.isComplete} overlap="circular">
+                      <Settings fontSize="small" />
+                    </Badge>
                   </IconButton>
                 </Tooltip>
               </>
