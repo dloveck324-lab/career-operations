@@ -30,6 +30,8 @@ interface ParsedCv {
   education: Array<{ degree: string; institution: string }>
 }
 
+interface Portal { name: string; type: string; company_id: string }
+
 function serializeCv(d: ParsedCv): string {
   const lines: string[] = [`# ${d.contact.name || ''}`, '']
   const parts = [d.contact.location, d.contact.phone, d.contact.email, d.contact.linkedin, d.contact.website].filter(Boolean)
@@ -53,30 +55,150 @@ function serializeCv(d: ParsedCv): string {
   return lines.join('\n')
 }
 
+const portalKey = (p: Portal) => `${p.type}:${p.company_id}`
+
 export function OnboardingPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
+
+  // Resume — keeps the parsed CV preview in memory so navigating back still
+  // shows the green "parsed" card without a re-upload.
+  const [parsedCv, setParsedCv] = useState<ParsedCv | null>(null)
+
+  // Profile fields — hydrated once on mount from the saved profile.yml.
+  const [primary, setPrimary] = useState<string[]>([])
+  const [targetRange, setTargetRange] = useState('')
+  const [minimum, setMinimum] = useState('')
+  const [workAuth, setWorkAuth] = useState('')
+  const [sponsorship, setSponsorship] = useState('')
+  const [locationFlex, setLocationFlex] = useState('')
+
+  // Filters — hydrated once on mount from filters.yml. STARTER_PORTALS toggles
+  // default to ON; any custom portal already in filters.yml is preserved.
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(STARTER_PORTALS.map(p => [portalKey(p), true])),
+  )
+  const [customPortals, setCustomPortals] = useState<Portal[]>([])
+  const [queries, setQueries] = useState<string[]>([])
+
+  // One-shot hydrate. Skips loudly so a fresh install just sees defaults.
+  useEffect(() => {
+    api.settings.profile().then((p: unknown) => {
+      const prof = (p ?? {}) as Record<string, Record<string, unknown>>
+      const tr = prof.target_roles ?? {}
+      const comp = prof.compensation ?? {}
+      const cand = prof.candidate ?? {}
+      const arr = (tr.primary ?? []) as string[]
+      if (Array.isArray(arr) && arr.length) setPrimary(arr)
+      setTargetRange((comp.target_range as string) ?? '')
+      setMinimum((comp.minimum as string) ?? '')
+      setWorkAuth((cand.work_authorization as string) ?? '')
+      setSponsorship((cand.requires_sponsorship as string) ?? '')
+      setLocationFlex((comp.location_flexibility as string) ?? '')
+    }).catch(() => null)
+
+    api.settings.filters().then((f: unknown) => {
+      const filters = (f ?? {}) as { portals?: Array<Portal & { enabled?: boolean }>; job_boards?: Array<{ queries?: string[] }> }
+      const known = new Set(STARTER_PORTALS.map(portalKey))
+      const en: Record<string, boolean> = Object.fromEntries(STARTER_PORTALS.map(p => [portalKey(p), true]))
+      const customs: Portal[] = []
+      for (const p of filters.portals ?? []) {
+        const k = portalKey(p)
+        if (known.has(k)) {
+          en[k] = p.enabled !== false
+        } else if (p.name && p.type && p.company_id) {
+          customs.push({ name: p.name, type: p.type, company_id: p.company_id })
+          en[k] = p.enabled !== false
+        }
+      }
+      setEnabled(en)
+      setCustomPortals(customs)
+      const qs = filters.job_boards?.[0]?.queries ?? []
+      if (qs.length) setQueries(qs.filter(q => q && q.trim()))
+    }).catch(() => null)
+  }, [])
+
   const finish = () => {
     localStorage.setItem('onboardingDismissed', '1')
     navigate('/pipeline')
   }
 
+  // Step 2 → 3 mirror: paste the primary roles from the profile step over the
+  // filters step's queries every time we move forward into filters. Per
+  // product spec — the source of truth for "what to search" is the role list.
+  const goToFilters = () => {
+    setQueries(primary.filter(Boolean))
+    setStep(3)
+  }
+
   return (
-    <Box sx={{ display: 'flex', minHeight: '100dvh', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'center', bgcolor: 'background.default', p: { xs: 2, sm: 4 } }}>
-      <Paper elevation={3} sx={{ p: { xs: 3, sm: 4 }, maxWidth: 720, width: '100%', borderRadius: 3 }}>
+    <Box sx={{
+      flex: 1,
+      width: '100%',
+      display: 'flex',
+      minHeight: '100dvh',
+      alignItems: { xs: 'flex-start', sm: 'center' },
+      justifyContent: 'center',
+      bgcolor: 'background.default',
+      p: { xs: 1.5, sm: 3, md: 4 },
+      overflowY: 'auto',
+    }}>
+      <Paper elevation={3} sx={{
+        p: { xs: 2, sm: 3, md: 4 },
+        maxWidth: 720,
+        width: '100%',
+        borderRadius: { xs: 2, sm: 3 },
+      }}>
         <Stack spacing={1} mb={3}>
-          <Typography variant="h5" fontWeight={700}>Welcome to Career Ops</Typography>
+          <Typography variant="h5" fontWeight={700} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>Welcome to Career Ops</Typography>
           <Typography variant="body2" color="text.secondary">A few quick steps so the app has what it needs to scan, evaluate, and apply on your behalf.</Typography>
         </Stack>
 
-        <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
+        <Stepper
+          activeStep={step}
+          alternativeLabel
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            // Compact step labels on mobile so the header doesn't wrap awkwardly
+            '& .MuiStepLabel-label': { fontSize: { xs: '0.7rem', sm: '0.8125rem' } },
+            '& .MuiStepLabel-iconContainer': { transform: { xs: 'scale(0.85)', sm: 'none' } },
+          }}
+        >
           {STEPS.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
         </Stepper>
 
         {step === 0 && <WelcomeStep onNext={() => setStep(1)} onSkip={finish} />}
-        {step === 1 && <ResumeStep onNext={() => setStep(2)} onSkip={() => setStep(2)} />}
-        {step === 2 && <ProfileStep onBack={() => setStep(1)} onNext={() => setStep(3)} onSkip={() => setStep(3)} />}
-        {step === 3 && <FiltersStep onBack={() => setStep(2)} onNext={() => setStep(4)} onSkip={() => setStep(4)} />}
+        {step === 1 && (
+          <ResumeStep
+            parsed={parsedCv}
+            setParsed={setParsedCv}
+            onNext={() => setStep(2)}
+            onSkip={() => setStep(2)}
+          />
+        )}
+        {step === 2 && (
+          <ProfileStep
+            primary={primary} setPrimary={setPrimary}
+            targetRange={targetRange} setTargetRange={setTargetRange}
+            minimum={minimum} setMinimum={setMinimum}
+            workAuth={workAuth} setWorkAuth={setWorkAuth}
+            sponsorship={sponsorship} setSponsorship={setSponsorship}
+            locationFlex={locationFlex} setLocationFlex={setLocationFlex}
+            onBack={() => setStep(1)}
+            onNext={goToFilters}
+            onSkip={goToFilters}
+          />
+        )}
+        {step === 3 && (
+          <FiltersStep
+            enabled={enabled} setEnabled={setEnabled}
+            customPortals={customPortals} setCustomPortals={setCustomPortals}
+            queries={queries} setQueries={setQueries}
+            onBack={() => setStep(2)}
+            onNext={() => setStep(4)}
+            onSkip={() => setStep(4)}
+          />
+        )}
         {step === 4 && <DoneStep onFinish={finish} />}
       </Paper>
     </Box>
@@ -97,9 +219,11 @@ function WelcomeStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
         <DepRow label="Claude CLI" ok={status?.claude.ok} hint="Used for resume parsing, job evaluation, and form autofill." installUrl="https://claude.ai/download" message={status?.claude.message} />
         <DepRow label="PinchTab daemon" ok={status?.pinchtab.ok} hint="Controls Chrome to autofill application forms." installCmd="pinchtab daemon install" message={status?.pinchtab.message} />
       </Stack>
-      <Alert severity="info" sx={{ '& .MuiAlert-message': { fontSize: '0.85rem' } }}>
-        You can continue even if a badge is red — fix it later from the Settings header. Resume parsing in the next step needs Claude CLI to be running.
-      </Alert>
+      {status && (status.claude.ok === false || status.pinchtab.ok === false) && (
+        <Alert severity="info" sx={{ '& .MuiAlert-message': { fontSize: '0.85rem' } }}>
+          You can continue even if a badge is red — fix it later from the Settings header. Resume parsing in the next step needs Claude CLI to be running.
+        </Alert>
+      )}
       <Stack direction="row" justifyContent="space-between">
         <Button onClick={onSkip} variant="text" color="inherit">Skip onboarding</Button>
         <Button onClick={onNext} variant="contained">Continue</Button>
@@ -131,10 +255,16 @@ function DepRow({ label, ok, hint, installUrl, installCmd, message }: { label: s
 }
 
 // ───────── Step 2: Resume ─────────
-function ResumeStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+interface ResumeStepProps {
+  parsed: ParsedCv | null
+  setParsed: (v: ParsedCv | null) => void
+  onNext: () => void
+  onSkip: () => void
+}
+
+function ResumeStep({ parsed, setParsed, onNext, onSkip }: ResumeStepProps) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [parsed, setParsed] = useState<ParsedCv | null>(null)
   const [savingNext, setSavingNext] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -233,31 +363,23 @@ function ResumeStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
 }
 
 // ───────── Step 3: Profile essentials ─────────
-function ProfileStep({ onBack, onNext, onSkip }: { onBack: () => void; onNext: () => void; onSkip: () => void }) {
-  const [primary, setPrimary] = useState<string[]>([])
-  const [targetRange, setTargetRange] = useState('')
-  const [minimum, setMinimum] = useState('')
-  const [workAuth, setWorkAuth] = useState('')
-  const [sponsorship, setSponsorship] = useState('')
-  const [locationFlex, setLocationFlex] = useState('')
+interface ProfileStepProps {
+  primary: string[]; setPrimary: (v: string[]) => void
+  targetRange: string; setTargetRange: (v: string) => void
+  minimum: string; setMinimum: (v: string) => void
+  workAuth: string; setWorkAuth: (v: string) => void
+  sponsorship: string; setSponsorship: (v: string) => void
+  locationFlex: string; setLocationFlex: (v: string) => void
+  onBack: () => void; onNext: () => void; onSkip: () => void
+}
+
+function ProfileStep({
+  primary, setPrimary, targetRange, setTargetRange, minimum, setMinimum,
+  workAuth, setWorkAuth, sponsorship, setSponsorship, locationFlex, setLocationFlex,
+  onBack, onNext, onSkip,
+}: ProfileStepProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    api.settings.profile().then((p: unknown) => {
-      const prof = (p ?? {}) as Record<string, Record<string, unknown>>
-      const tr = prof.target_roles ?? {}
-      const comp = prof.compensation ?? {}
-      const cand = prof.candidate ?? {}
-      const arr = (tr.primary ?? []) as string[]
-      setPrimary(Array.isArray(arr) ? arr : [])
-      setTargetRange((comp.target_range as string) ?? '')
-      setMinimum((comp.minimum as string) ?? '')
-      setWorkAuth((cand.work_authorization as string) ?? '')
-      setSponsorship((cand.requires_sponsorship as string) ?? '')
-      setLocationFlex((comp.location_flexibility as string) ?? '')
-    }).catch(() => null)
-  }, [])
 
   const save = async () => {
     setSaving(true); setError(null)
@@ -332,38 +454,43 @@ function ProfileStep({ onBack, onNext, onSkip }: { onBack: () => void; onNext: (
 }
 
 // ───────── Step 4: Filters ─────────
-function FiltersStep({ onBack, onNext, onSkip }: { onBack: () => void; onNext: () => void; onSkip: () => void }) {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(STARTER_PORTALS.map(p => [`${p.type}:${p.company_id}`, true])),
-  )
-  const [customPortals, setCustomPortals] = useState<Array<{ name: string; type: string; company_id: string }>>([])
+interface FiltersStepProps {
+  enabled: Record<string, boolean>; setEnabled: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void
+  customPortals: Portal[]; setCustomPortals: (updater: (prev: Portal[]) => Portal[]) => void
+  queries: string[]; setQueries: (v: string[]) => void
+  onBack: () => void; onNext: () => void; onSkip: () => void
+}
+
+function FiltersStep({
+  enabled, setEnabled, customPortals, setCustomPortals, queries, setQueries,
+  onBack, onNext, onSkip,
+}: FiltersStepProps) {
   const [newPortalName, setNewPortalName] = useState('')
   const [newPortalType, setNewPortalType] = useState('greenhouse')
   const [newPortalId, setNewPortalId] = useState('')
-  const [queries, setQueries] = useState<string[]>(['senior product manager remote'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const allPortals = [...STARTER_PORTALS, ...customPortals]
+  const allPortals: Portal[] = [...STARTER_PORTALS, ...customPortals]
 
   const addCustom = () => {
     if (!newPortalName.trim() || !newPortalId.trim()) return
     const key = `${newPortalType}:${newPortalId}`
-    if (allPortals.some(p => `${p.type}:${p.company_id}` === key)) return
+    if (allPortals.some(p => portalKey(p) === key)) return
     setCustomPortals(c => [...c, { name: newPortalName.trim(), type: newPortalType, company_id: newPortalId.trim() }])
     setEnabled(en => ({ ...en, [key]: true }))
     setNewPortalName(''); setNewPortalId('')
   }
 
   const removeCustom = (key: string) => {
-    setCustomPortals(c => c.filter(p => `${p.type}:${p.company_id}` !== key))
+    setCustomPortals(c => c.filter(p => portalKey(p) !== key))
     setEnabled(en => { const n = { ...en }; delete n[key]; return n })
   }
 
   const save = async () => {
     setSaving(true); setError(null)
     try {
-      const portals = allPortals.map(p => ({ ...p, enabled: enabled[`${p.type}:${p.company_id}`] !== false }))
+      const portals = allPortals.map(p => ({ ...p, enabled: enabled[portalKey(p)] !== false }))
       await api.settings.saveFilters({
         portals,
         job_boards: [{ type: 'indeed_rss', queries: queries.filter(q => q.trim()), enabled: queries.some(q => q.trim()) }],
@@ -386,8 +513,8 @@ function FiltersStep({ onBack, onNext, onSkip }: { onBack: () => void; onNext: (
       <Paper variant="outlined" sx={{ maxHeight: 280, overflow: 'auto' }}>
         <Stack divider={<Divider />}>
           {allPortals.map(p => {
-            const key = `${p.type}:${p.company_id}`
-            const isCustom = customPortals.some(cp => `${cp.type}:${cp.company_id}` === key)
+            const key = portalKey(p)
+            const isCustom = customPortals.some(cp => portalKey(cp) === key)
             return (
               <Stack key={key} direction="row" alignItems="center" spacing={1.5} sx={{ px: 2, py: 1 }}>
                 <FormControlLabel
@@ -417,7 +544,12 @@ function FiltersStep({ onBack, onNext, onSkip }: { onBack: () => void; onNext: (
       </Stack>
 
       <Divider />
-      <ChipArrayInput label="Job board search queries (Indeed RSS)" values={queries} onChange={setQueries} placeholder="senior product manager remote" />
+      <Stack spacing={0.5}>
+        <ChipArrayInput label="Job board search queries (Indeed RSS)" values={queries} onChange={setQueries} placeholder="senior product manager remote" />
+        <Typography variant="caption" color="text.secondary">
+          Pre-filled from your target roles in the previous step. Edit freely — these go to Indeed RSS as search terms.
+        </Typography>
+      </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 
