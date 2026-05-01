@@ -12,6 +12,7 @@ import { assistantRoutes } from './routes/assistant.js'
 import { authRoutes } from './routes/auth.js'
 import { adminRoutes } from './routes/admin.js'
 import { cvUploadRoutes } from './routes/cv-upload.js'
+import { onboardingRoutes } from './routes/onboarding.js'
 import { configExists, loadProfile } from '@job-pipeline/core'
 import { runImportWizard } from './import/wizard.js'
 import { getTokenUsage, seedFieldMappingsFromProfile } from './db/queries.js'
@@ -63,6 +64,7 @@ await app.register(applyRoutes, { prefix: '/api' })
 await app.register(portalsRoutes, { prefix: '/api' })
 await app.register(assistantRoutes, { prefix: '/api' })
 await app.register(cvUploadRoutes, { prefix: '/api' })
+await app.register(onboardingRoutes, { prefix: '/api' })
 
 app.get('/api/health', async () => {
   const cfg = configExists()
@@ -73,27 +75,6 @@ app.get('/api/health', async () => {
 app.get('/api/import/status', async () => {
   const cfg = configExists()
   return { needsImport: !cfg.profile || !cfg.cv, sourceExists: true, ...cfg }
-})
-
-// First-launch onboarding gate. Returns needsOnboarding=true when profile/cv
-// look like the public-template placeholders (e.g. full_name "Your Name",
-// email "you@example.com") so a fresh clone gets the wizard.
-app.get('/api/onboarding/status', async () => {
-  const cfg = configExists()
-  const profile = loadProfile()
-  const candidate = (profile?.candidate ?? {}) as Record<string, string>
-  const fullName = (candidate.full_name ?? '').trim()
-  const email = (candidate.email ?? '').trim()
-  const isPlaceholderName = !fullName || /^your\s*name$/i.test(fullName)
-  const isPlaceholderEmail = !email || /^you@example\.com$/i.test(email)
-  const profileFilled = cfg.profile && !isPlaceholderName && !isPlaceholderEmail
-  const cvFilled = cfg.cv
-  return {
-    needsOnboarding: !profileFilled || !cvFilled,
-    profileFilled,
-    cvFilled,
-    filtersFilled: cfg.filters,
-  }
 })
 
 app.post('/api/import', async () => runImportWizard())

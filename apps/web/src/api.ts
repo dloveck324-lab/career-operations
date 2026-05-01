@@ -115,6 +115,8 @@ export const api = {
     }),
   importStatus: () => req<{ needsImport: boolean; profile: boolean; cv: boolean; filters: boolean }>('/import/status'),
   onboardingStatus: () => req<{ needsOnboarding: boolean; profileFilled: boolean; cvFilled: boolean; filtersFilled: boolean }>('/onboarding/status'),
+  onboardingEvent: (step: string, action: 'enter' | 'next' | 'back' | 'skip' | 'finish') =>
+    req<{ ok: true }>('/onboarding/event', { method: 'POST', body: JSON.stringify({ step, action }) }),
   runImport: () => req<ImportResult>('/import', { method: 'POST' }),
   settings: {
     status: () => req<{ config: unknown; pinchtab: { ok: boolean; message?: string }; claude: { ok: boolean; path?: string; message?: string } }>('/settings/status'),

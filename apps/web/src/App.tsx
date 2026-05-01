@@ -53,16 +53,18 @@ export default function App() {
 function AuthedRoutes({ needsOnboarding }: { needsOnboarding: boolean }) {
   const { pathname } = useLocation()
 
-  if (pathname === '/welcome') {
+  if (pathname.startsWith('/welcome')) {
     return (
       <Routes>
-        <Route path="/welcome" element={<OnboardingPage />} />
+        <Route path="/welcome" element={<Navigate to="/welcome/welcome" replace />} />
+        <Route path="/welcome/:step" element={<OnboardingPage />} />
+        <Route path="/welcome/*" element={<Navigate to="/welcome/welcome" replace />} />
       </Routes>
     )
   }
 
   if (needsOnboarding && pathname !== '/login') {
-    return <Navigate to="/welcome" replace />
+    return <Navigate to="/welcome/welcome" replace />
   }
 
   return (

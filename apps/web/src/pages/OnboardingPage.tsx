@@ -5,11 +5,29 @@ import {
   Switch, FormControlLabel, Divider, IconButton, LinearProgress,
 } from '@mui/material'
 import { CheckCircle, Error as ErrorIcon, UploadFile, Delete, OpenInNew } from '@mui/icons-material'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { ChipArrayInput } from '../components/ChipArrayInput.js'
 
-const STEPS = ['Welcome', 'Resume', 'Profile', 'Job filters', 'Done']
+// Index ↔ slug ↔ label. The URL slug is what shows up in /welcome/<slug>
+// for funnel tracking — every entry and transition fires an event so the
+// server log shows where users drop off.
+const STEP_SLUGS = ['welcome', 'resume', 'profile', 'filters', 'done'] as const
+type StepSlug = typeof STEP_SLUGS[number]
+const STEP_LABELS: Record<StepSlug, string> = {
+  welcome: 'Welcome',
+  resume: 'Resume',
+  profile: 'Profile',
+  filters: 'Job filters',
+  done: 'Done',
+}
+const STEPS = STEP_SLUGS.map(s => STEP_LABELS[s])
+
+type OnboardingAction = 'enter' | 'next' | 'back' | 'skip' | 'finish'
+const trackEvent = (step: StepSlug, action: OnboardingAction) => {
+  // Fire-and-forget; never block the UI on telemetry.
+  api.onboardingEvent(step, action).catch(() => null)
+}
 
 const STARTER_PORTALS: Array<{ name: string; type: string; company_id: string }> = [
   { name: 'Anthropic', type: 'greenhouse', company_id: 'anthropic' },
@@ -59,7 +77,21 @@ const portalKey = (p: Portal) => `${p.type}:${p.company_id}`
 
 export function OnboardingPage() {
   const navigate = useNavigate()
-  const [step, setStep] = useState(0)
+  const { step: stepParam } = useParams<{ step: string }>()
+  const stepSlug: StepSlug = (STEP_SLUGS as readonly string[]).includes(stepParam ?? '')
+    ? (stepParam as StepSlug)
+    : 'welcome'
+  const step = STEP_SLUGS.indexOf(stepSlug)
+  const goto = (i: number, action: OnboardingAction = 'next') => {
+    trackEvent(stepSlug, action)
+    const target = STEP_SLUGS[Math.max(0, Math.min(STEP_SLUGS.length - 1, i))]
+    navigate(`/welcome/${target}`)
+  }
+
+  // Fire an `enter` event for every step the user lands on (including via
+  // browser back/forward and direct URL hits). Each entry is one funnel data
+  // point — the gap between consecutive enters is your drop-off.
+  useEffect(() => { trackEvent(stepSlug, 'enter') }, [stepSlug])
 
   // Resume — keeps the parsed CV preview in memory so navigating back still
   // shows the green "parsed" card without a re-upload.
@@ -119,6 +151,7 @@ export function OnboardingPage() {
   }, [])
 
   const finish = () => {
+    trackEvent(stepSlug, 'finish')
     localStorage.setItem('onboardingDismissed', '1')
     navigate('/pipeline')
   }
@@ -126,9 +159,9 @@ export function OnboardingPage() {
   // Step 2 → 3 mirror: paste the primary roles from the profile step over the
   // filters step's queries every time we move forward into filters. Per
   // product spec — the source of truth for "what to search" is the role list.
-  const goToFilters = () => {
+  const goToFilters = (action: OnboardingAction) => {
     setQueries(primary.filter(Boolean))
-    setStep(3)
+    goto(3, action)
   }
 
   return (
@@ -167,13 +200,13 @@ export function OnboardingPage() {
           {STEPS.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
         </Stepper>
 
-        {step === 0 && <WelcomeStep onNext={() => setStep(1)} onSkip={finish} />}
+        {step === 0 && <WelcomeStep onNext={() => goto(1, 'next')} onSkip={finish} />}
         {step === 1 && (
           <ResumeStep
             parsed={parsedCv}
             setParsed={setParsedCv}
-            onNext={() => setStep(2)}
-            onSkip={() => setStep(2)}
+            onNext={() => goto(2, 'next')}
+            onSkip={() => goto(2, 'skip')}
           />
         )}
         {step === 2 && (
@@ -184,9 +217,9 @@ export function OnboardingPage() {
             workAuth={workAuth} setWorkAuth={setWorkAuth}
             sponsorship={sponsorship} setSponsorship={setSponsorship}
             locationFlex={locationFlex} setLocationFlex={setLocationFlex}
-            onBack={() => setStep(1)}
-            onNext={goToFilters}
-            onSkip={goToFilters}
+            onBack={() => goto(1, 'back')}
+            onNext={() => goToFilters('next')}
+            onSkip={() => goToFilters('skip')}
           />
         )}
         {step === 3 && (
@@ -194,9 +227,9 @@ export function OnboardingPage() {
             enabled={enabled} setEnabled={setEnabled}
             customPortals={customPortals} setCustomPortals={setCustomPortals}
             queries={queries} setQueries={setQueries}
-            onBack={() => setStep(2)}
-            onNext={() => setStep(4)}
-            onSkip={() => setStep(4)}
+            onBack={() => goto(2, 'back')}
+            onNext={() => goto(4, 'next')}
+            onSkip={() => goto(4, 'skip')}
           />
         )}
         {step === 4 && <DoneStep onFinish={finish} />}
@@ -574,7 +607,7 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
       <Stack spacing={1}>
         <Typography variant="h6">You're set up</Typography>
         <Typography variant="body2" color="text.secondary">
-          Click <strong>SCAN</strong> in the topbar to fetch jobs, then <strong>EVALUATE</strong> to score them. Tweak any of this from <strong>Settings</strong> at any time.
+          Open the pipeline to start. Once you're there, click <strong>SCAN</strong> in the topbar to fetch jobs, then <strong>EVALUATE</strong> to score them. You can tweak any of this from <strong>Settings</strong> at any time.
         </Typography>
       </Stack>
       <Button onClick={onFinish} variant="contained" size="large">Open the pipeline</Button>
