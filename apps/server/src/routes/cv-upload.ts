@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import multipart from '@fastify/multipart'
 import { spawn } from 'child_process'
+import { writeFileSync, mkdirSync } from 'fs'
+import { resolve } from 'path'
+
+const CONFIG_DIR = resolve(process.cwd(), '../../config')
 
 let pdfParse: ((buf: Buffer) => Promise<{ text: string }>) | null = null
 async function getPdfParse() {
@@ -106,11 +110,13 @@ export async function cvUploadRoutes(app: FastifyInstance) {
     const buf = Buffer.concat(chunks)
 
     let text = ''
+    let isPdf = false
     try {
       if (mimeType === 'application/pdf' || filename.toLowerCase().endsWith('.pdf')) {
         const parse = await getPdfParse()
         const result = await parse(buf)
         text = result.text
+        isPdf = true
       } else if (
         mimeType === 'text/plain' ||
         filename.toLowerCase().endsWith('.txt') ||
@@ -136,6 +142,13 @@ export async function cvUploadRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: `Resume parsing failed: ${err instanceof Error ? err.message : String(err)}` })
     }
 
-    return { ok: true, cv: parsed }
+    if (isPdf) {
+      try {
+        mkdirSync(CONFIG_DIR, { recursive: true })
+        writeFileSync(resolve(CONFIG_DIR, 'cv.pdf'), buf)
+      } catch { /* non-fatal — autofill will fall back if PDF missing */ }
+    }
+
+    return { ok: true, cv: parsed, pdfSaved: isPdf }
   })
 }

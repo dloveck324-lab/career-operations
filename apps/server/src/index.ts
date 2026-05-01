@@ -75,6 +75,27 @@ app.get('/api/import/status', async () => {
   return { needsImport: !cfg.profile || !cfg.cv, sourceExists: true, ...cfg }
 })
 
+// First-launch onboarding gate. Returns needsOnboarding=true when profile/cv
+// look like the public-template placeholders (e.g. full_name "Your Name",
+// email "you@example.com") so a fresh clone gets the wizard.
+app.get('/api/onboarding/status', async () => {
+  const cfg = configExists()
+  const profile = loadProfile()
+  const candidate = (profile?.candidate ?? {}) as Record<string, string>
+  const fullName = (candidate.full_name ?? '').trim()
+  const email = (candidate.email ?? '').trim()
+  const isPlaceholderName = !fullName || /^your\s*name$/i.test(fullName)
+  const isPlaceholderEmail = !email || /^you@example\.com$/i.test(email)
+  const profileFilled = cfg.profile && !isPlaceholderName && !isPlaceholderEmail
+  const cvFilled = cfg.cv
+  return {
+    needsOnboarding: !profileFilled || !cvFilled,
+    profileFilled,
+    cvFilled,
+    filtersFilled: cfg.filters,
+  }
+})
+
 app.post('/api/import', async () => runImportWizard())
 
 // Auto-import from Dave's job search on first boot
