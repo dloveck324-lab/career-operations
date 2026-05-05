@@ -14,6 +14,10 @@ import {
   saveFieldMappingIfMissing,
   upsertJobContent,
   getJobContent,
+  recordEvalFailure,
+  clearEvalFailure,
+  commitEvaluation,
+  MAX_EVAL_ATTEMPTS,
 } from '../db/queries.js'
 import type { JobStatus } from '../db/queries.js'
 
@@ -225,5 +229,127 @@ describe('field mappings — variant partitioning', () => {
     expect(saveFieldMappingIfMissing('Per-variant onboarding?', 'C', 'generic')).toBe(false)
     expect(lookupFieldMapping('Per-variant onboarding?', 'generic')).toBe('A')
     expect(lookupFieldMapping('Per-variant onboarding?', 'healthcare')).toBe('B')
+  })
+})
+
+// ── eval failure tracking ─────────────────────────────────────────────────────
+
+describe('recordEvalFailure', () => {
+  it('increments eval_attempts and stores the error on first failure', () => {
+    const { id } = upsertJob(nextJob())
+    const result = recordEvalFailure(id, 'Network timeout')
+    expect(result).toEqual({ attempts: 1, skipped: false })
+    const job = getJob(id)!
+    expect(job.eval_attempts).toBe(1)
+    expect(job.eval_last_error).toBe('Network timeout')
+    expect(job.eval_last_error_kind).toBe('other')
+    expect(job.status).toBe('prescreened')
+  })
+
+  it('skips=false on the second attempt', () => {
+    const { id } = upsertJob(nextJob())
+    recordEvalFailure(id, 'fail 1')
+    const result = recordEvalFailure(id, 'fail 2')
+    expect(result).toEqual({ attempts: 2, skipped: false })
+    expect(getJob(id)!.status).toBe('prescreened')
+  })
+
+  it(`auto-skips on the ${MAX_EVAL_ATTEMPTS}rd attempt with eval_failed: prefix`, () => {
+    const { id } = upsertJob(nextJob())
+    recordEvalFailure(id, 'fail 1')
+    recordEvalFailure(id, 'fail 2')
+    const result = recordEvalFailure(id, 'fail 3')
+    expect(result.skipped).toBe(true)
+    expect(result.attempts).toBe(MAX_EVAL_ATTEMPTS)
+    const job = getJob(id)!
+    expect(job.status).toBe('skipped')
+    expect(job.skip_reason).toMatch(/^eval_failed: fail 3/)
+  })
+
+  it('does NOT auto-skip on credit-shaped errors even after the threshold', () => {
+    const { id } = upsertJob(nextJob())
+    recordEvalFailure(id, 'credit balance too low', { kind: 'credits' })
+    recordEvalFailure(id, 'credit balance too low', { kind: 'credits' })
+    const result = recordEvalFailure(id, 'credit balance too low', { kind: 'credits' })
+    expect(result).toEqual({ attempts: MAX_EVAL_ATTEMPTS, skipped: false })
+    expect(getJob(id)!.status).toBe('prescreened')
+  })
+
+  it('does NOT auto-skip on rate_limit or auth errors', () => {
+    const a = upsertJob(nextJob({ external_id: 'rl-job' })).id
+    recordEvalFailure(a, '429', { kind: 'rate_limit' })
+    recordEvalFailure(a, '429', { kind: 'rate_limit' })
+    expect(recordEvalFailure(a, '429', { kind: 'rate_limit' }).skipped).toBe(false)
+    expect(getJob(a)!.status).toBe('prescreened')
+
+    const b = upsertJob(nextJob({ external_id: 'auth-job' })).id
+    recordEvalFailure(b, '401', { kind: 'auth' })
+    recordEvalFailure(b, '401', { kind: 'auth' })
+    expect(recordEvalFailure(b, '401', { kind: 'auth' }).skipped).toBe(false)
+    expect(getJob(b)!.status).toBe('prescreened')
+  })
+
+  it('truncates the stored error message at 500 chars', () => {
+    const { id } = upsertJob(nextJob())
+    const long = 'X'.repeat(2000)
+    recordEvalFailure(id, long)
+    expect(getJob(id)!.eval_last_error?.length).toBe(500)
+  })
+})
+
+describe('clearEvalFailure', () => {
+  it('zeroes the counter and nulls the error fields', () => {
+    const { id } = upsertJob(nextJob())
+    recordEvalFailure(id, 'something broke')
+    expect(getJob(id)!.eval_attempts).toBe(1)
+    clearEvalFailure(id)
+    const job = getJob(id)!
+    expect(job.eval_attempts).toBe(0)
+    expect(job.eval_last_error).toBeNull()
+    expect(job.eval_last_error_kind).toBeNull()
+    expect(job.eval_last_attempted_at).toBeNull()
+  })
+})
+
+describe('commitEvaluation', () => {
+  it('atomically saves an evaluation, resets the counter, and updates status', () => {
+    const { id } = upsertJob(nextJob())
+    // Seed prior failures
+    recordEvalFailure(id, 'transient')
+    recordEvalFailure(id, 'transient')
+    expect(getJob(id)!.eval_attempts).toBe(2)
+
+    commitEvaluation({
+      evaluation: { job_id: id, model: 'haiku', prompt_tokens: 0, completion_tokens: 0, score: 4, verdict_md: 'looks good', raw_response: '{}' },
+      jobId: id,
+      statusUpdate: {
+        status: 'evaluated',
+        score: 4,
+        score_reason: 'looks good',
+        evaluated_at: new Date().toISOString(),
+      },
+    })
+
+    const job = getJob(id)!
+    expect(job.status).toBe('evaluated')
+    expect(job.score).toBe(4)
+    expect(job.eval_attempts).toBe(0)
+    expect(job.eval_last_error).toBeNull()
+
+    const evalRow = db.prepare('SELECT * FROM evaluations WHERE job_id = ?').get(id) as { score: number; profile_variant: string }
+    expect(evalRow.score).toBe(4)
+  })
+
+  it('persists a secondary evaluation when provided (dual-eval ambiguous case)', () => {
+    const { id } = upsertJob(nextJob())
+    commitEvaluation({
+      evaluation: { job_id: id, model: 'haiku', prompt_tokens: 0, completion_tokens: 0, score: 4, verdict_md: '', raw_response: '{}', profile_variant: 'healthcare' },
+      secondary: { job_id: id, model: 'haiku', prompt_tokens: 0, completion_tokens: 0, score: 3, verdict_md: '', raw_response: '{}', profile_variant: 'generic' },
+      jobId: id,
+      statusUpdate: { status: 'evaluated', score: 4 },
+    })
+    const rows = db.prepare('SELECT profile_variant, score FROM evaluations WHERE job_id = ? ORDER BY profile_variant').all(id) as Array<{ profile_variant: string; score: number }>
+    expect(rows).toHaveLength(2)
+    expect(rows.map(r => r.profile_variant).sort()).toEqual(['generic', 'healthcare'])
   })
 })

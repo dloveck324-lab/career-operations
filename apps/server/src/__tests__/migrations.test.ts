@@ -18,6 +18,22 @@ describe('runMigrations', () => {
     expect(columnNames(db, 'field_mappings')).toContain('profile_variant')
   })
 
+  it('adds eval-disposition columns on a fresh DB', () => {
+    const db = new Database(':memory:')
+    runMigrations(db)
+    expect(columnNames(db, 'jobs')).toEqual(
+      expect.arrayContaining(['eval_attempts', 'eval_last_error', 'eval_last_attempted_at', 'eval_last_error_kind']),
+    )
+    // eval_attempts defaults to 0 NOT NULL — verify by inserting a job and reading back.
+    db.prepare(`
+      INSERT INTO jobs (source, external_id, url, company, title)
+      VALUES ('test', 'mig-1', 'http://x', 'Acme', 'Engineer')
+    `).run()
+    const row = db.prepare('SELECT eval_attempts, eval_last_error FROM jobs WHERE external_id = ?').get('mig-1') as { eval_attempts: number; eval_last_error: string | null }
+    expect(row.eval_attempts).toBe(0)
+    expect(row.eval_last_error).toBeNull()
+  })
+
   it('is idempotent: running twice does not throw or duplicate columns', () => {
     const db = new Database(':memory:')
     runMigrations(db)
