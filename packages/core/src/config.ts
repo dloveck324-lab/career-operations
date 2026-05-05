@@ -70,6 +70,7 @@ export interface ProfileConfig {
       worldwide_remote_ok?: boolean
     }
     blocklist_titles?: string[]
+    blocklist_requirements?: string[]
     archetype_keywords?: Record<string, string[]>
   }
 }

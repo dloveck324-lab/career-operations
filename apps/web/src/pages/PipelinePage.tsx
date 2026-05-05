@@ -5,22 +5,24 @@ import {
   IconButton, ButtonGroup, Tooltip, Popover, ToggleButtonGroup,
   ToggleButton, Select, MenuItem, FormControl, InputLabel,
   Autocomplete, Divider, Menu, Snackbar, Alert,
+  Accordion, AccordionSummary, AccordionDetails,
   useTheme, useMediaQuery,
 } from '@mui/material'
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
   LightMode, DarkMode, SettingsBrightness, Settings,
-  SmartToyOutlined, MoreVert,
+  SmartToyOutlined, MoreVert, ExpandMore, Lightbulb,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   DataGrid, type GridColDef, type GridCellParams, type GridRowSelectionModel,
 } from '@mui/x-data-grid'
-import { api, type Job, type JobStatus, type Stats, type ClaudeUsage } from '../api.js'
+import { api, type Job, type JobStatus, type Stats, type ClaudeUsage, type SkipPattern } from '../api.js'
 import { ScoreChip } from '../components/ScoreChip.js'
 import { DirectionalScoreChip } from '../components/DirectionalScoreChip.js'
 import { IndustryBadge } from '../components/IndustryBadge.js'
 import { JobDetailDrawer } from '../components/JobDetailDrawer.js'
+import { SkipReasonDialog } from '../components/SkipReasonDialog.js'
 import { useGridState } from '../hooks/useGridState.js'
 import { useProfileCompleteness } from '../hooks/useProfileCompleteness.js'
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeContext.js'
@@ -38,7 +40,7 @@ const TABS: Array<{ label: string; statuses: JobStatus[] }> = [
   { label: 'Closed',    statuses: ['completed', 'skipped'] },
 ]
 
-type BulkAction = { label: string; color: 'warning' | 'error' | 'success' | 'primary'; fn: (ids: number[]) => Promise<unknown> }
+type BulkAction = { label: string; color: 'warning' | 'error' | 'success' | 'primary'; fn: (ids: number[]) => Promise<unknown>; needsReason?: true }
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   scanned: '#6b7280',
@@ -365,6 +367,89 @@ function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]
   } satisfies GridColDef] : []),
 ]}
 
+// ─── Skip pattern row ─────────────────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  language_requirement: 'Language requirement',
+  seniority_mismatch: 'Seniority mismatch',
+  location_mismatch: 'Location mismatch',
+  comp_too_low: 'Comp too low',
+  wrong_industry: 'Wrong industry',
+  wrong_function: 'Wrong function',
+  certification_required: 'Certification required',
+  visa_sponsorship: 'Visa sponsorship',
+  culture_fit: 'Culture fit',
+  other: 'Other',
+}
+
+// Maps a category to the profile.yml prescreen blocklist to add keywords to.
+// Returns null for categories that don't have a keyword-level fix.
+function categoryToBlocklist(category: string): 'blocklist_requirements' | 'blocklist_titles' | 'location_blocklist' | null {
+  if (['language_requirement', 'certification_required', 'visa_sponsorship', 'culture_fit', 'other'].includes(category)) return 'blocklist_requirements'
+  if (category === 'location_mismatch') return 'location_blocklist'
+  if (['wrong_industry', 'wrong_function'].includes(category)) return 'blocklist_titles'
+  return null  // seniority_mismatch / comp_too_low handled via Settings
+}
+
+interface SkipPatternRowProps {
+  pattern: SkipPattern
+  onAdded: () => void
+}
+
+function SkipPatternRow({ pattern, onAdded }: SkipPatternRowProps) {
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+  const navigate = useNavigate()
+  const targetList = categoryToBlocklist(pattern.category)
+
+  const handleAdd = async () => {
+    if (!targetList || pattern.keywords.length === 0) return
+    setAdding(true)
+    try {
+      await api.addToBlocklist(targetList, pattern.keywords)
+      setAdded(true)
+      onAdded()
+    } catch {
+      // silent — user can retry
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1} flexWrap="wrap">
+      <Chip label={CATEGORY_LABELS[pattern.category] ?? pattern.category} size="small" color="warning" variant="outlined" />
+      <Chip label={`${pattern.count}×`} size="small" sx={{ fontVariantNumeric: 'tabular-nums' }} />
+      {pattern.keywords.length > 0 && (
+        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+          {pattern.keywords.map(kw => (
+            <Chip key={kw} label={kw} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+          ))}
+        </Stack>
+      )}
+      <Box sx={{ flex: 1 }} />
+      {added ? (
+        <Typography variant="caption" color="success.main">Added — takes effect on next scan</Typography>
+      ) : targetList && pattern.keywords.length > 0 ? (
+        <Button
+          size="small"
+          variant="outlined"
+          color="warning"
+          disabled={adding}
+          startIcon={adding ? <CircularProgress size={12} color="inherit" /> : undefined}
+          onClick={handleAdd}
+        >
+          Add to blocklist
+        </Button>
+      ) : (
+        <Button size="small" variant="text" color="inherit" onClick={() => navigate('/settings?tab=2')}>
+          Adjust in Settings →
+        </Button>
+      )}
+    </Stack>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function PipelinePage() {
   const navigate = useNavigate()
@@ -434,6 +519,11 @@ export function PipelinePage() {
   // problem (credits, rate limit, auth). Cleared on the next successful
   // eval. Surfaces an actionable signal instead of jobs silently sitting.
   const [creditsLow, setCreditsLow] = useState<{ message: string; kind: string } | null>(null)
+  const [skipDialog, setSkipDialog] = useState<{ ids: number[] } | null>(null)
+  const [skipDialogLoading, setSkipDialogLoading] = useState(false)
+  const [skipPatterns, setSkipPatterns] = useState<SkipPattern[]>([])
+  // Incremented after every skip action to trigger pattern re-fetch
+  const [skipPatternRevision, setSkipPatternRevision] = useState(0)
 
   const selectedIds = selectionModel as number[]
 
@@ -467,6 +557,11 @@ export function PipelinePage() {
   useEffect(() => {
     api.settings.claudeUsage().then(setClaudeUsage).catch(() => {})
   }, [])
+
+  // Refresh skip patterns whenever a skip action completes
+  useEffect(() => {
+    api.skipPatterns().then(setSkipPatterns).catch(() => {})
+  }, [skipPatternRevision])
 
   // Load first name from profile (candidate.full_name)
   useEffect(() => {
@@ -671,6 +766,11 @@ export function PipelinePage() {
 
   const runBulkAction = async (action: BulkAction) => {
     if (selectedIds.length === 0) return
+    // Skip actions open a reason dialog first; actual API call is in handleSkipConfirm
+    if (action.needsReason) {
+      setSkipDialog({ ids: [...selectedIds] })
+      return
+    }
     setBulkLoading(action.label)
     try {
       await action.fn(selectedIds)
@@ -681,17 +781,26 @@ export function PipelinePage() {
     }
   }
 
-  const handleSkipUnder = async (threshold: number) => {
+  const handleSkipConfirm = async (reason?: string) => {
+    if (!skipDialog) return
+    const { ids } = skipDialog
+    setSkipDialogLoading(true)
+    try {
+      await api.bulkStatus(ids, 'skipped', reason)
+      setSelectionModel([])
+      setSkipDialog(null)
+      setSkipPatternRevision(r => r + 1)
+      await Promise.all([loadJobs(), loadStats()])
+    } finally {
+      setSkipDialogLoading(false)
+    }
+  }
+
+  const handleSkipUnder = (threshold: number) => {
     setSkipMenuAnchor(null)
     const toSkip = jobs.filter(j => (j.score ?? 0) < threshold).map(j => j.id)
     if (toSkip.length === 0) return
-    setBulkLoading(`skip-under-${threshold}`)
-    try {
-      await api.bulkStatus(toSkip, 'skipped')
-      await Promise.all([loadJobs(), loadStats()])
-    } finally {
-      setBulkLoading(null)
-    }
+    setSkipDialog({ ids: toSkip })
   }
 
   const bulkActions: BulkAction[] = useMemo(() => {
@@ -707,27 +816,27 @@ export function PipelinePage() {
     switch (tab) {
       case 0: return [
         { label: 'Evaluate', color: 'warning', fn: ids => api.evaluate({ ids }) },
-        { label: 'Skip',     color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Skip',     color: 'error',   fn: () => Promise.resolve(), needsReason: true },
       ]
       case 1: return [
         autoApply,
         { label: 'Re-evaluate',   color: 'warning', fn: ids => api.evaluate({ ids }) },
         { label: 'Back to Inbox', color: 'primary', fn: ids => api.requeue(ids) },
         { label: 'Applied',       color: 'success', fn: ids => api.bulkStatus(ids, 'applied') },
-        { label: 'Skip',          color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Skip',          color: 'error',   fn: () => Promise.resolve(), needsReason: true },
       ]
       case 2: return [
         autoApply,
         { label: 'Applied', color: 'success', fn: ids => api.bulkStatus(ids, 'applied') },
-        { label: 'Skip',    color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Skip',    color: 'error',   fn: () => Promise.resolve(), needsReason: true },
       ]
       case 3: return [
         { label: 'Interview', color: 'warning', fn: ids => api.bulkStatus(ids, 'interview') },
-        { label: 'Skip',      color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Skip',      color: 'error',   fn: () => Promise.resolve(), needsReason: true },
       ]
       case 4: return [
         { label: 'Completed', color: 'success', fn: ids => api.bulkStatus(ids, 'completed') },
-        { label: 'Skip',      color: 'error',   fn: ids => api.bulkStatus(ids, 'skipped') },
+        { label: 'Skip',      color: 'error',   fn: () => Promise.resolve(), needsReason: true },
       ]
       default: return []
     }
@@ -1099,6 +1208,44 @@ export function PipelinePage() {
         onClose={() => setSelected(null)}
         onStatusChange={() => { loadJobs(); loadStats() }}
       />
+
+      {/* ── Skip reason dialog ───────────────────────────────────────────── */}
+      <SkipReasonDialog
+        open={skipDialog !== null}
+        count={skipDialog?.ids.length ?? 1}
+        loading={skipDialogLoading}
+        onConfirm={handleSkipConfirm}
+        onCancel={() => setSkipDialog(null)}
+      />
+
+      {/* ── Skip patterns panel ──────────────────────────────────────────── */}
+      {skipPatterns.length > 0 && (
+        <Accordion
+          disableGutters
+          elevation={0}
+          sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', '&:before': { display: 'none' } }}
+        >
+          <AccordionSummary expandIcon={<ExpandMore />} sx={{ minHeight: 44 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Lightbulb sx={{ fontSize: 16, color: 'warning.main' }} />
+              <Typography variant="body2" fontWeight={600}>
+                {skipPatterns.length} recurring skip {skipPatterns.length === 1 ? 'pattern' : 'patterns'} — add to blocklist?
+              </Typography>
+            </Stack>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 0, pb: 2 }}>
+            <Stack spacing={1.5}>
+              {skipPatterns.map(pattern => (
+                <SkipPatternRow
+                  key={pattern.category}
+                  pattern={pattern}
+                  onAdded={() => setSkipPatternRevision(r => r + 1)}
+                />
+              ))}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      )}
 
       <Snackbar open={scanToast !== null} autoHideDuration={null} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
         <Alert severity={scanToast?.severity ?? 'info'} variant="filled" onClose={() => setScanToast(null)} sx={{ minWidth: 280, fontVariantNumeric: 'tabular-nums' }}>

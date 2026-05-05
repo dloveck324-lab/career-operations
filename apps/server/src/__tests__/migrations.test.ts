@@ -102,6 +102,19 @@ describe('runMigrations', () => {
     expect(fm.answer).toBe('Dave')
   })
 
+  it('adds skip_tags column on a fresh DB', () => {
+    const db = new Database(':memory:')
+    runMigrations(db)
+    expect(columnNames(db, 'jobs')).toContain('skip_tags')
+    // Verify nullable default by inserting and reading back
+    db.prepare(`
+      INSERT INTO jobs (source, external_id, url, company, title)
+      VALUES ('test', 'skip-tags-1', 'http://x', 'Acme', 'Engineer')
+    `).run()
+    const row = db.prepare('SELECT skip_tags FROM jobs WHERE external_id = ?').get('skip-tags-1') as { skip_tags: string | null }
+    expect(row.skip_tags).toBeNull()
+  })
+
   it('field_mappings UNIQUE constraint partitions by (question_hash, profile_variant)', () => {
     const db = new Database(':memory:')
     runMigrations(db)

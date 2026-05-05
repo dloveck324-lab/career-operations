@@ -226,3 +226,41 @@ describe('buildPrescreen — no config', () => {
     expect(prescreen({ title: 'Anything', location: 'Remote' }).archetype).toBeNull()
   })
 })
+
+describe('buildPrescreen — blocklist_requirements', () => {
+  const prescreen = buildPrescreen({ blocklist_requirements: ['french', 'bilingual'] })
+
+  it('blocks a job whose description contains the term (case-insensitive)', () => {
+    const r = prescreen({ title: 'Account Executive', location: 'Remote', description: 'Fluency in French is required.' })
+    expect(r.pass).toBe(false)
+    expect(r.reason).toContain('blocklist match "french"')
+  })
+
+  it('blocks on the second term in the list', () => {
+    const r = prescreen({ title: 'Customer Success', location: 'Remote', description: 'Must be bilingual.' })
+    expect(r.pass).toBe(false)
+    expect(r.reason).toContain('blocklist match "bilingual"')
+  })
+
+  it('does NOT block when the term is only in the title, not the description', () => {
+    // "french" in title should NOT trigger blocklist_requirements (only blocklist_titles does title)
+    const r = prescreen({ title: 'French Customer Success Manager', location: 'Remote', description: 'Great role in Paris.' })
+    expect(r.pass).toBe(true)
+  })
+
+  it('passes a job with a clean description', () => {
+    const r = prescreen({ title: 'Engineer', location: 'Remote', description: 'Build great products.' })
+    expect(r.pass).toBe(true)
+  })
+
+  it('is case-insensitive', () => {
+    const r = prescreen({ title: 'Engineer', location: 'Remote', description: 'Candidate must speak FRENCH fluently.' })
+    expect(r.pass).toBe(false)
+  })
+
+  it('does not trigger on a partial word match ("afrench" should not match "french")', () => {
+    const r = prescreen({ title: 'Engineer', location: 'Remote', description: 'No special afrench requirements here.' })
+    expect(r.pass).toBe(true)
+  })
+})
+

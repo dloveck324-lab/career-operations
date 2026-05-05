@@ -297,6 +297,33 @@ export async function settingsRoutes(app: FastifyInstance) {
     return { ok: true }
   })
 
+  /**
+   * Append terms to a specific prescreen blocklist in profile.yml.
+   * Body: { list: 'blocklist_requirements' | 'blocklist_titles' | 'location_blocklist', terms: string[] }
+   * Dedupes — won't add a term that already exists in the list.
+   */
+  app.patch('/settings/profile/blocklist', async (req) => {
+    const body = z.object({
+      list: z.enum(['blocklist_requirements', 'blocklist_titles', 'location_blocklist']),
+      terms: z.array(z.string().min(1)).min(1),
+    }).parse(req.body)
+
+    const path = configPath('profile.yml')
+    const existing = existsSync(path)
+      ? ((yaml.load(readFileSync(path, 'utf-8')) as Record<string, unknown> | null) ?? {})
+      : {}
+
+    const prescreen = (existing.prescreen ?? {}) as Record<string, unknown>
+    const currentList: string[] = Array.isArray(prescreen[body.list]) ? prescreen[body.list] as string[] : []
+    const toAdd = body.terms.filter(t => !currentList.includes(t))
+    const merged = {
+      ...existing,
+      prescreen: { ...prescreen, [body.list]: [...currentList, ...toAdd] },
+    }
+    writeFileSync(path, yaml.dump(merged, { lineWidth: 120 }))
+    return { ok: true, added: toAdd.length, skipped: body.terms.length - toAdd.length }
+  })
+
   app.get('/settings/filters', async () => {
     const path = configPath('filters.yml')
     if (!existsSync(path)) return null

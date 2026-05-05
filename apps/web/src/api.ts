@@ -29,6 +29,18 @@ export type IndustryVertical = 'healthcare' | 'generic' | 'ambiguous' | 'unclass
 export type ProfileVariant = 'healthcare' | 'generic'
 export type EvalErrorKind = 'credits' | 'rate_limit' | 'parse' | 'auth' | 'other'
 
+export type SkipCategory =
+  | 'language_requirement' | 'seniority_mismatch' | 'location_mismatch' | 'comp_too_low'
+  | 'wrong_industry' | 'wrong_function' | 'certification_required' | 'visa_sponsorship'
+  | 'culture_fit' | 'other'
+
+export interface SkipPattern {
+  category: SkipCategory
+  count: number
+  keywords: string[]
+  examples: Array<{ id: number; company: string; title: string; skip_reason: string | null }>
+}
+
 export interface Job {
   id: number
   source: string
@@ -55,6 +67,8 @@ export interface Job {
   eval_last_error?: string
   eval_last_attempted_at?: string
   eval_last_error_kind?: EvalErrorKind
+  /** Raw JSON string from skip_tags column; parse before use */
+  skip_tags?: string
 }
 
 export interface TokenUsage { prompt: number; completion: number; total: number }
@@ -105,8 +119,11 @@ export const api = {
     req<{ ok: boolean }>(`/jobs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, skip_reason: skipReason }) }),
   requeue: (ids?: number[]) =>
     req<{ count: number }>('/jobs/requeue', { method: 'POST', body: JSON.stringify({ ids }) }),
-  bulkStatus: (ids: number[], status: JobStatus) =>
-    req<{ count: number }>('/jobs/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
+  bulkStatus: (ids: number[], status: JobStatus, skipReason?: string) =>
+    req<{ count: number }>('/jobs/bulk-status', { method: 'POST', body: JSON.stringify({ ids, status, skip_reason: skipReason }) }),
+  skipPatterns: () => req<SkipPattern[]>('/jobs/skip-patterns'),
+  addToBlocklist: (list: 'blocklist_requirements' | 'blocklist_titles' | 'location_blocklist', terms: string[]) =>
+    req<{ ok: boolean; added: number; skipped: number }>('/settings/profile/blocklist', { method: 'PATCH', body: JSON.stringify({ list, terms }) }),
   scan: () => req<{ runId: number }>('/scan', { method: 'POST' }),
   pauseScan: () => req<{ ok: boolean }>('/scan/pause', { method: 'POST' }),
   evaluate: (opts?: { model?: 'haiku' | 'sonnet'; limit?: number; company?: string; ids?: number[] }) =>

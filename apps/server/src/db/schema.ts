@@ -51,6 +51,8 @@ export interface Job {
   eval_last_error?: string
   eval_last_attempted_at?: string
   eval_last_error_kind?: EvalErrorKind
+  /** JSON string: {"category":"language_requirement","keywords":["french"]} */
+  skip_tags?: string
 }
 
 export type EvalErrorKind = 'credits' | 'rate_limit' | 'parse' | 'auth' | 'other'
