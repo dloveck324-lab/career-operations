@@ -38,10 +38,15 @@ export async function jobRoutes(app: FastifyInstance) {
 
     const count = bulkUpdateStatus(body.ids, body.status as JobStatus, body.skip_reason)
 
-    // If skipping with a reason, extract tags once and apply to all IDs
+    // Tag extraction is intentionally fire-and-forget. The Haiku call takes
+    // ~5 seconds; we don't want to block the user on it. Patterns will pick up
+    // the new tags on the next skipPatterns() fetch.
     if (body.status === 'skipped' && body.skip_reason) {
-      const tags = await extractSkipTags(body.skip_reason)
-      for (const id of body.ids) setSkipTags(id, tags)
+      const reason = body.skip_reason
+      const ids = body.ids
+      void extractSkipTags(reason)
+        .then(tags => { for (const id of ids) setSkipTags(id, tags) })
+        .catch(() => { /* swallow — tag extraction failure must not bubble */ })
     }
 
     return { count }
@@ -69,10 +74,15 @@ export async function jobRoutes(app: FastifyInstance) {
 
     updateJobStatus(Number(id), body.status, extra as Parameters<typeof updateJobStatus>[2])
 
-    // Synchronously extract and store skip tags when a manual reason is provided
+    // Fire-and-forget tag extraction (see /bulk-status note). Returning
+    // immediately keeps the UI snappy; tags appear in the patterns panel
+    // a few seconds later when extraction completes.
     if (body.status === 'skipped' && body.skip_reason) {
-      const tags = await extractSkipTags(body.skip_reason)
-      setSkipTags(Number(id), tags)
+      const reason = body.skip_reason
+      const jobId = Number(id)
+      void extractSkipTags(reason)
+        .then(tags => setSkipTags(jobId, tags))
+        .catch(() => { /* swallow — tag extraction failure must not bubble */ })
     }
 
     return { ok: true }

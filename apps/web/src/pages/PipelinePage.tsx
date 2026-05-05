@@ -791,6 +791,11 @@ export function PipelinePage() {
       setSkipDialog(null)
       setSkipPatternRevision(r => r + 1)
       await Promise.all([loadJobs(), loadStats()])
+      // Tag extraction is async on the server (~5s). Re-fetch patterns
+      // a moment later so newly-tagged skips show up without a manual refresh.
+      if (reason) {
+        setTimeout(() => setSkipPatternRevision(r => r + 1), 8000)
+      }
     } finally {
       setSkipDialogLoading(false)
     }
@@ -1206,7 +1211,14 @@ export function PipelinePage() {
       <JobDetailDrawer
         job={selected}
         onClose={() => setSelected(null)}
-        onStatusChange={() => { loadJobs(); loadStats() }}
+        onStatusChange={() => {
+          loadJobs(); loadStats()
+          // Patterns may need a refresh too (drawer can trigger a skip).
+          // Tag extraction is async on the server, so refetch immediately
+          // and again after ~8s to catch the late-arriving tag.
+          setSkipPatternRevision(r => r + 1)
+          setTimeout(() => setSkipPatternRevision(r => r + 1), 8000)
+        }}
       />
 
       {/* ── Skip reason dialog ───────────────────────────────────────────── */}
