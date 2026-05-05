@@ -113,6 +113,12 @@ export function runMigrations(db: DatabaseType): void {
     db.exec(`ALTER TABLE evaluations ADD COLUMN profile_variant TEXT NOT NULL DEFAULT 'generic'`)
   }
 
+  // Skip-tagging migration. Stores a JSON object {"category","keywords"} so
+  // the UI can aggregate recurring skip patterns and suggest blocklist entries.
+  if (!hasColumn('jobs', 'skip_tags')) {
+    db.exec(`ALTER TABLE jobs ADD COLUMN skip_tags TEXT`)
+  }
+
   // Step 3: add profile_variant column to field_mappings (idempotent).
   if (!hasColumn('field_mappings', 'profile_variant')) {
     db.exec(`ALTER TABLE field_mappings ADD COLUMN profile_variant TEXT NOT NULL DEFAULT 'generic'`)

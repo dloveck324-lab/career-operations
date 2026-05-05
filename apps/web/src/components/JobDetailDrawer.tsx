@@ -11,6 +11,7 @@ import { api, type Job, type AutofillModel, type ProfileVariant } from '../api.j
 import { ScoreChip } from './ScoreChip.js'
 import { IndustryBadge } from './IndustryBadge.js'
 import { AutofillChatPanel } from './AutofillChatPanel.js'
+import { SkipReasonDialog } from './SkipReasonDialog.js'
 
 interface Props {
   job: Job | null
@@ -31,6 +32,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [variantPickerOpen, setVariantPickerOpen] = useState(false)
   const [pendingModel, setPendingModel] = useState<AutofillModel | null>(null)
   const [pickedVariant, setPickedVariant] = useState<ProfileVariant>('generic')
+  const [skipDialogOpen, setSkipDialogOpen] = useState(false)
+  const [skipLoading, setSkipLoading] = useState(false)
 
   // Reset chat panel + message when switching jobs; look up any active run for this job
   useEffect(() => {
@@ -123,11 +126,12 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     onClose()
   }
 
-  const handleSkip = async () => {
+  const handleSkipConfirm = async (reason: string | undefined) => {
     if (!job) return
-    setLoading('skip')
-    await api.updateStatus(job.id, 'skipped')
-    setLoading(null)
+    setSkipLoading(true)
+    await api.updateStatus(job.id, 'skipped', reason)
+    setSkipLoading(false)
+    setSkipDialogOpen(false)
     onStatusChange()
     onClose()
   }
@@ -224,8 +228,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                 variant="text"
                 color="inherit"
                 startIcon={<SkipNext />}
-                onClick={handleSkip}
-                disabled={!!loading}
+                onClick={() => setSkipDialogOpen(true)}
+                disabled={!!loading || skipLoading}
                 size="small"
               >
                 Skip
@@ -267,8 +271,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                 variant="text"
                 color="inherit"
                 startIcon={<SkipNext />}
-                onClick={handleSkip}
-                disabled={!!loading}
+                onClick={() => setSkipDialogOpen(true)}
+                disabled={!!loading || skipLoading}
                 size="small"
               >
                 Skip
@@ -329,6 +333,13 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
           </Button>
         </DialogActions>
       </Dialog>
+      <SkipReasonDialog
+        open={skipDialogOpen}
+        count={1}
+        loading={skipLoading}
+        onConfirm={handleSkipConfirm}
+        onCancel={() => setSkipDialogOpen(false)}
+      />
     </Drawer>
   )
 }

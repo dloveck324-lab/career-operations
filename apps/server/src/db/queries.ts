@@ -464,18 +464,77 @@ export function requeueJobs(ids?: number[]): number {
   return result.changes
 }
 
-export function bulkUpdateStatus(ids: number[], status: JobStatus): number {
+export function bulkUpdateStatus(ids: number[], status: JobStatus, skipReason?: string): number {
   if (ids.length === 0) return 0
   const run = db.transaction((list: number[]) => {
     let changes = 0
-    const stmt = db.prepare(`UPDATE jobs SET status = @status, updated_at = datetime('now') WHERE id = @id`)
+    const stmt = skipReason
+      ? db.prepare(`UPDATE jobs SET status = @status, skip_reason = @skip_reason, updated_at = datetime('now') WHERE id = @id`)
+      : db.prepare(`UPDATE jobs SET status = @status, updated_at = datetime('now') WHERE id = @id`)
     for (const id of list) {
-      const r = stmt.run({ status, id }) as { changes: number }
+      const r = stmt.run(skipReason ? { status, skip_reason: skipReason, id } : { status, id }) as { changes: number }
       changes += r.changes
     }
     return changes
   })
   return run(ids)
+}
+
+// ── Skip tagging ──────────────────────────────────────────────────────────────
+//
+// When the user manually skips a job with a reason, Haiku classifies it into
+// a structured tag. These tags accumulate and are aggregated by `getSkipPatterns`
+// to surface recurring reasons and suggest prescreen blocklist additions.
+
+export interface SkipPattern {
+  category: string
+  count: number
+  keywords: string[]
+  examples: Array<{ id: number; company: string; title: string; skip_reason: string | null }>
+}
+
+export function setSkipTags(id: number, tags: { category: string; keywords: string[] }): void {
+  db.prepare(`UPDATE jobs SET skip_tags = ? WHERE id = ?`).run(JSON.stringify(tags), id)
+}
+
+export function getSkipPatterns(): SkipPattern[] {
+  const rows = db.prepare(`
+    SELECT id, company, title, skip_reason, skip_tags
+    FROM jobs
+    WHERE status = 'skipped' AND skip_tags IS NOT NULL
+    ORDER BY updated_at DESC
+  `).all() as Array<{ id: number; company: string; title: string; skip_reason: string | null; skip_tags: string }>
+
+  // Aggregate by category
+  const byCategory = new Map<string, { count: number; keywords: Set<string>; examples: SkipPattern['examples'] }>()
+
+  for (const row of rows) {
+    let parsed: { category?: string; keywords?: string[] }
+    try { parsed = JSON.parse(row.skip_tags) } catch { continue }
+
+    const category = typeof parsed.category === 'string' ? parsed.category : 'other'
+    const keywords: string[] = Array.isArray(parsed.keywords) ? parsed.keywords.filter(k => typeof k === 'string') : []
+
+    if (!byCategory.has(category)) {
+      byCategory.set(category, { count: 0, keywords: new Set(), examples: [] })
+    }
+    const entry = byCategory.get(category)!
+    entry.count++
+    for (const kw of keywords) entry.keywords.add(kw)
+    if (entry.examples.length < 3) {
+      entry.examples.push({ id: row.id, company: row.company, title: row.title, skip_reason: row.skip_reason })
+    }
+  }
+
+  return [...byCategory.entries()]
+    .filter(([, v]) => v.count >= 2)
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([category, v]) => ({
+      category,
+      count: v.count,
+      keywords: [...v.keywords],
+      examples: v.examples,
+    }))
 }
 
 // ── Evaluations ───────────────────────────────────────────────────────────────

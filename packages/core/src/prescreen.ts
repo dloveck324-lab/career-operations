@@ -9,6 +9,7 @@ export interface PrescreenConfig {
     worldwide_remote_ok?: boolean
   }
   blocklist_titles?: string[]
+  blocklist_requirements?: string[]
   archetype_keywords?: Record<string, string[]>
   title_filter?: {
     positive?: string[]
@@ -183,6 +184,7 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
     comp_floor = 0,
     location_policy = {},
     blocklist_titles = [],
+    blocklist_requirements = [],
     archetype_keywords = {},
     title_filter = {},
     location_blocklist = [],
@@ -205,6 +207,12 @@ export function buildPrescreen(config: PrescreenConfig = {}) {
     for (const blocked of blocklist_titles) {
       if (matchesTitleKeyword(title, blocked)) {
         return { pass: false, reason: `Skipped: title — blocklist match "${blocked}"`, archetype: null }
+      }
+    }
+
+    for (const blocked of blocklist_requirements) {
+      if (matchesTitleKeyword(description, blocked)) {
+        return { pass: false, reason: `Skipped: requirements — blocklist match "${blocked}"`, archetype: null }
       }
     }
 

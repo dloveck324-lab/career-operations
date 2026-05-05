@@ -18,6 +18,9 @@ import {
   clearEvalFailure,
   commitEvaluation,
   MAX_EVAL_ATTEMPTS,
+  setSkipTags,
+  getSkipPatterns,
+  bulkUpdateStatus,
 } from '../db/queries.js'
 import type { JobStatus } from '../db/queries.js'
 
@@ -351,5 +354,68 @@ describe('commitEvaluation', () => {
     const rows = db.prepare('SELECT profile_variant, score FROM evaluations WHERE job_id = ? ORDER BY profile_variant').all(id) as Array<{ profile_variant: string; score: number }>
     expect(rows).toHaveLength(2)
     expect(rows.map(r => r.profile_variant).sort()).toEqual(['generic', 'healthcare'])
+  })
+})
+
+// ── Skip tagging ──────────────────────────────────────────────────────────────
+
+describe('skip tagging — setSkipTags + getSkipPatterns', () => {
+  beforeEach(() => {
+    db.exec('DELETE FROM jobs; DELETE FROM field_mappings;')
+  })
+
+  const seedSkipped = (skipReason: string) => {
+    const { id } = upsertJob(nextJob({ status: 'prescreened' }))
+    updateJobStatus(id, 'skipped', { skip_reason: skipReason })
+    return id
+  }
+
+  it('setSkipTags stores parseable JSON on the job row', () => {
+    const id = seedSkipped('requires French')
+    setSkipTags(id, { category: 'language_requirement', keywords: ['french'] })
+    const row = db.prepare('SELECT skip_tags FROM jobs WHERE id = ?').get(id) as { skip_tags: string }
+    const parsed = JSON.parse(row.skip_tags)
+    expect(parsed.category).toBe('language_requirement')
+    expect(parsed.keywords).toEqual(['french'])
+  })
+
+  it('getSkipPatterns returns nothing when every category appears only once', () => {
+    const id1 = seedSkipped('requires French')
+    const id2 = seedSkipped('must relocate to NYC')
+    setSkipTags(id1, { category: 'language_requirement', keywords: ['french'] })
+    setSkipTags(id2, { category: 'location_mismatch', keywords: ['nyc'] })
+    expect(getSkipPatterns()).toHaveLength(0)
+  })
+
+  it('getSkipPatterns returns a pattern when the same category appears ≥ 2 times', () => {
+    const id1 = seedSkipped('requires French')
+    const id2 = seedSkipped('must speak Spanish')
+    setSkipTags(id1, { category: 'language_requirement', keywords: ['french'] })
+    setSkipTags(id2, { category: 'language_requirement', keywords: ['spanish'] })
+    const patterns = getSkipPatterns()
+    expect(patterns).toHaveLength(1)
+    expect(patterns[0].category).toBe('language_requirement')
+    expect(patterns[0].count).toBe(2)
+    expect(patterns[0].keywords).toEqual(expect.arrayContaining(['french', 'spanish']))
+    expect(patterns[0].examples).toHaveLength(2)
+  })
+
+  it('getSkipPatterns deduplicates keywords across jobs in the same category', () => {
+    const id1 = seedSkipped('French required')
+    const id2 = seedSkipped('Also requires French')
+    setSkipTags(id1, { category: 'language_requirement', keywords: ['french'] })
+    setSkipTags(id2, { category: 'language_requirement', keywords: ['french'] })
+    const patterns = getSkipPatterns()
+    // "french" should appear only once even though two jobs have it
+    expect(patterns[0].keywords.filter(k => k === 'french')).toHaveLength(1)
+  })
+
+  it('bulkUpdateStatus sets skip_reason on all rows when provided', () => {
+    const id1 = upsertJob(nextJob()).id
+    const id2 = upsertJob(nextJob()).id
+    bulkUpdateStatus([id1, id2], 'skipped', 'on-site required')
+    const jobs = [getJob(id1)!, getJob(id2)!]
+    expect(jobs.every(j => j.status === 'skipped')).toBe(true)
+    expect(jobs.every(j => j.skip_reason === 'on-site required')).toBe(true)
   })
 })

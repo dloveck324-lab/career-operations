@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
-  getJobs, getJob, updateJobStatus, getJobStats, getJobContent, requeueJobs, bulkUpdateStatus,
+  getJobs, getJob, updateJobStatus, getJobStats, getJobContent, requeueJobs,
+  bulkUpdateStatus, setSkipTags, getSkipPatterns,
   type JobStatus,
 } from '../db/queries.js'
+import { extractSkipTags } from '../claude/skip-tagger.js'
 
 const JOB_STATUSES: JobStatus[] = ['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']
 
@@ -31,8 +33,17 @@ export async function jobRoutes(app: FastifyInstance) {
     const body = z.object({
       ids: z.array(z.number()),
       status: z.enum(['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']),
+      skip_reason: z.string().optional(),
     }).parse(req.body)
-    const count = bulkUpdateStatus(body.ids, body.status as JobStatus)
+
+    const count = bulkUpdateStatus(body.ids, body.status as JobStatus, body.skip_reason)
+
+    // If skipping with a reason, extract tags once and apply to all IDs
+    if (body.status === 'skipped' && body.skip_reason) {
+      const tags = await extractSkipTags(body.skip_reason)
+      for (const id of body.ids) setSkipTags(id, tags)
+    }
+
     return { count }
   })
 
@@ -57,6 +68,17 @@ export async function jobRoutes(app: FastifyInstance) {
     if (body.skip_reason) extra.skip_reason = body.skip_reason
 
     updateJobStatus(Number(id), body.status, extra as Parameters<typeof updateJobStatus>[2])
+
+    // Synchronously extract and store skip tags when a manual reason is provided
+    if (body.status === 'skipped' && body.skip_reason) {
+      const tags = await extractSkipTags(body.skip_reason)
+      setSkipTags(Number(id), tags)
+    }
+
     return { ok: true }
   })
+
+  // Aggregates skip_tags across all manually-skipped jobs and returns patterns
+  // with count ≥ 2 so the UI can suggest blocklist additions.
+  app.get('/jobs/skip-patterns', async () => getSkipPatterns())
 }
