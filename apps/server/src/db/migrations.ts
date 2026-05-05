@@ -92,6 +92,23 @@ export function runMigrations(db: DatabaseType): void {
   if (!hasColumn('jobs', 'directional_score')) {
     db.exec(`ALTER TABLE jobs ADD COLUMN directional_score INTEGER`)
   }
+
+  // Eval-disposition migration (see docs/PIPELINE.md and the eval-disposition
+  // PR). Tracks how many times the evaluator has tried a job, the last error
+  // message, when it last attempted, and the classified kind of error so the
+  // UI can show a credit-low banner vs a generic eval failure.
+  if (!hasColumn('jobs', 'eval_attempts')) {
+    db.exec(`ALTER TABLE jobs ADD COLUMN eval_attempts INTEGER NOT NULL DEFAULT 0`)
+  }
+  if (!hasColumn('jobs', 'eval_last_error')) {
+    db.exec(`ALTER TABLE jobs ADD COLUMN eval_last_error TEXT`)
+  }
+  if (!hasColumn('jobs', 'eval_last_attempted_at')) {
+    db.exec(`ALTER TABLE jobs ADD COLUMN eval_last_attempted_at TEXT`)
+  }
+  if (!hasColumn('jobs', 'eval_last_error_kind')) {
+    db.exec(`ALTER TABLE jobs ADD COLUMN eval_last_error_kind TEXT`)
+  }
   if (!hasColumn('evaluations', 'profile_variant')) {
     db.exec(`ALTER TABLE evaluations ADD COLUMN profile_variant TEXT NOT NULL DEFAULT 'generic'`)
   }

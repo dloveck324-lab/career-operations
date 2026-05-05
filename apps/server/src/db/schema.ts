@@ -47,7 +47,13 @@ export interface Job {
   updated_at: string
   industry_vertical?: IndustryVerticalDb
   directional_score?: number
+  eval_attempts?: number
+  eval_last_error?: string
+  eval_last_attempted_at?: string
+  eval_last_error_kind?: EvalErrorKind
 }
+
+export type EvalErrorKind = 'credits' | 'rate_limit' | 'parse' | 'auth' | 'other'
 
 export interface Evaluation {
   id: number

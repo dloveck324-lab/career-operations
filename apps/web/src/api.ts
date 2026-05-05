@@ -27,6 +27,7 @@ export type JobStatus = 'scanned' | 'prescreened' | 'evaluated' | 'ready_to_subm
 
 export type IndustryVertical = 'healthcare' | 'generic' | 'ambiguous' | 'unclassified'
 export type ProfileVariant = 'healthcare' | 'generic'
+export type EvalErrorKind = 'credits' | 'rate_limit' | 'parse' | 'auth' | 'other'
 
 export interface Job {
   id: number
@@ -50,6 +51,10 @@ export interface Job {
   content?: { raw_text?: string; cleaned_md?: string } | null
   industry_vertical?: IndustryVertical
   directional_score?: number
+  eval_attempts?: number
+  eval_last_error?: string
+  eval_last_attempted_at?: string
+  eval_last_error_kind?: EvalErrorKind
 }
 
 export interface TokenUsage { prompt: number; completion: number; total: number }
@@ -105,7 +110,7 @@ export const api = {
   scan: () => req<{ runId: number }>('/scan', { method: 'POST' }),
   pauseScan: () => req<{ ok: boolean }>('/scan/pause', { method: 'POST' }),
   evaluate: (opts?: { model?: 'haiku' | 'sonnet'; limit?: number; company?: string; ids?: number[] }) =>
-    req<{ queued: number }>('/evaluate', { method: 'POST', body: JSON.stringify(opts ?? {}) }),
+    req<{ queued: number; reason?: 'busy' }>('/evaluate', { method: 'POST', body: JSON.stringify(opts ?? {}) }),
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
   evaluateCompanies: () => req<string[]>('/evaluate/companies'),
   evaluateOne: (id: number, deep = false) => req<unknown>(`/evaluate/${id}`, { method: 'POST', body: JSON.stringify({ deep }) }),

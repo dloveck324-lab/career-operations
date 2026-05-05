@@ -1,5 +1,5 @@
-import { db, type Job, type JobStatus } from './schema.js'
-export type { JobStatus }
+import { db, type Job, type JobStatus, type EvalErrorKind } from './schema.js'
+export type { JobStatus, EvalErrorKind }
 import { createHash } from 'crypto'
 import type { ProfileConfig } from '@job-pipeline/core'
 
@@ -73,6 +73,105 @@ export function updateJobStatus(id: number, status: JobStatus, extra?: Partial<P
   if (extra?.applied_at) { updates.push('applied_at = @applied_at'); params.applied_at = extra.applied_at }
 
   db.prepare(`UPDATE jobs SET ${updates.join(', ')} WHERE id = @id`).run(params)
+}
+
+// ── Eval failure tracking ────────────────────────────────────────────────────
+//
+// The evaluator can fail for many reasons: API credit exhaustion, rate
+// limits, malformed Claude output, or server errors. Without persistence
+// the same broken jobs get retried on every EVALUATE click, and the user
+// has no signal as to why.
+//
+// `recordEvalFailure` increments a counter; after MAX_EVAL_ATTEMPTS the
+// job is auto-skipped with a structured `skip_reason`. Credit-related
+// errors are exempt from auto-skip — the user fixes the credits and
+// retries; we don't want a billing outage to bury 76 jobs.
+//
+// `commitEvaluation` is the success path — it wraps saveEvaluation +
+// status update + counter reset in a single SQLite transaction so an
+// abort signal between the calls can't leave the job in a half-state.
+
+export const MAX_EVAL_ATTEMPTS = 3
+
+interface RecordEvalFailureResult {
+  attempts: number
+  skipped: boolean
+}
+
+/**
+ * Increment the failure counter on a job. If the new attempt count is
+ * `>= MAX_EVAL_ATTEMPTS` AND the kind is not 'credits' (which is treated
+ * as transient infra), the job is moved to 'skipped' with a structured
+ * skip_reason.
+ */
+export function recordEvalFailure(
+  id: number,
+  errorMessage: string,
+  options?: { kind?: EvalErrorKind },
+): RecordEvalFailureResult {
+  const truncated = errorMessage.slice(0, 500)
+  const kind = options?.kind ?? 'other'
+  const row = db.prepare(`
+    UPDATE jobs
+    SET eval_attempts = eval_attempts + 1,
+        eval_last_error = @err,
+        eval_last_error_kind = @kind,
+        eval_last_attempted_at = datetime('now'),
+        updated_at = datetime('now')
+    WHERE id = @id
+    RETURNING eval_attempts
+  `).get({ id, err: truncated, kind }) as { eval_attempts: number } | undefined
+  const attempts = row?.eval_attempts ?? 0
+  // Credit-shaped errors are NEVER auto-skipped: the user needs to top
+  // up; the jobs should remain retriable. Same for rate_limit and auth
+  // (transient or fixable).
+  const isInfra = kind === 'credits' || kind === 'rate_limit' || kind === 'auth'
+  if (attempts >= MAX_EVAL_ATTEMPTS && !isInfra) {
+    updateJobStatus(id, 'skipped', { skip_reason: `eval_failed: ${truncated.slice(0, 200)}` })
+    return { attempts, skipped: true }
+  }
+  return { attempts, skipped: false }
+}
+
+/** Reset the failure counter. Called inside `commitEvaluation` on success. */
+export function clearEvalFailure(id: number): void {
+  db.prepare(`
+    UPDATE jobs
+    SET eval_attempts = 0,
+        eval_last_error = NULL,
+        eval_last_error_kind = NULL,
+        eval_last_attempted_at = NULL
+    WHERE id = ?
+  `).run(id)
+}
+
+/**
+ * Atomic save+update for the success path. Wrapping these three writes
+ * in a single transaction prevents the orphan-row race where an abort
+ * signal between saveEvaluation and updateJobStatus would leave the job
+ * still flagged 'prescreened' despite having a stored evaluation.
+ */
+export function commitEvaluation(args: {
+  evaluation: Parameters<typeof saveEvaluation>[0]
+  secondary?: Parameters<typeof saveEvaluation>[0]
+  jobId: number
+  statusUpdate: Partial<Pick<Job, 'score' | 'score_reason' | 'archetype' | 'evaluated_at'>> & { status: JobStatus }
+}): void {
+  const tx = db.transaction(() => {
+    saveEvaluation(args.evaluation)
+    if (args.secondary) saveEvaluation(args.secondary)
+    db.prepare(`
+      UPDATE jobs
+      SET eval_attempts = 0,
+          eval_last_error = NULL,
+          eval_last_error_kind = NULL,
+          eval_last_attempted_at = NULL
+      WHERE id = ?
+    `).run(args.jobId)
+    const { status, ...extra } = args.statusUpdate
+    updateJobStatus(args.jobId, status, extra)
+  })
+  tx()
 }
 
 export function getJobStats(): Record<JobStatus, number> {

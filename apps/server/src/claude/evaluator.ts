@@ -1,6 +1,21 @@
 import { spawn } from 'child_process'
 import { loadProfile, loadProfileVariant, loadCv, type ProfileVariant } from '@job-pipeline/core'
-import type { Job, ProfileVariantDb } from '../db/schema.js'
+import type { Job, ProfileVariantDb, EvalErrorKind } from '../db/schema.js'
+
+/**
+ * Map a free-form Claude CLI error message to a structured kind so the UI
+ * can surface the right signal. Patterns intentionally match broadly —
+ * a false positive on `'credits'` is acceptable (banner appears, user
+ * verifies and dismisses); a false negative is worse (user is left guessing).
+ */
+export function classifyEvalError(message: string): EvalErrorKind {
+  const m = (message ?? '').toLowerCase()
+  if (/credit|balance|insufficient.*quota|402|payment.required/.test(m)) return 'credits'
+  if (/rate.?limit|429|too.many.requests/.test(m)) return 'rate_limit'
+  if (/no json|parse|unexpected token/.test(m)) return 'parse'
+  if (/401|unauthor|invalid.*api.?key|authentication/.test(m)) return 'auth'
+  return 'other'
+}
 
 export interface ParsedEvalResponse {
   model: string

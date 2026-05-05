@@ -296,7 +296,28 @@ function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]
     field: 'score',
     headerName: 'Score',
     width: 100,
-    renderCell: ({ value }) => <ScoreChip score={value as number | null} />,
+    renderCell: ({ value, row }) => {
+      const j = row as Job
+      // When the evaluator has failed at least once but no score is on
+      // record, show a ⚠ chip with the attempt counter — clarifies that
+      // we tried, what went wrong, and how many tries are left before
+      // auto-skip. Tooltip surfaces the underlying error message.
+      const attempts = j.eval_attempts ?? 0
+      if (attempts >= 1 && !value) {
+        return (
+          <Tooltip title={`Attempt ${attempts}/3 — ${j.eval_last_error ?? 'unknown error'}`}>
+            <Chip
+              label={`⚠ ${attempts}/3`}
+              size="small"
+              color="warning"
+              variant="outlined"
+              sx={{ fontSize: '0.7rem', cursor: 'help' }}
+            />
+          </Tooltip>
+        )
+      }
+      return <ScoreChip score={value as number | null} />
+    },
     sortComparator: (a, b) => (b ?? -1) - (a ?? -1),
   },
   {
@@ -409,6 +430,10 @@ export function PipelinePage() {
   const [evalQueueIds, setEvalQueueIds] = useState<Set<number>>(new Set())
   const [autofillActiveIds, setAutofillActiveIds] = useState<Set<number>>(new Set())
   const [positiveKeywords, setPositiveKeywords] = useState<string[]>([])
+  // Persistent banner shown when the evaluator hits an Anthropic-side
+  // problem (credits, rate limit, auth). Cleared on the next successful
+  // eval. Surfaces an actionable signal instead of jobs silently sitting.
+  const [creditsLow, setCreditsLow] = useState<{ message: string; kind: string } | null>(null)
 
   const selectedIds = selectionModel as number[]
 
@@ -500,6 +525,8 @@ export function PipelinePage() {
       if (evt.type === 'eval_done') {
         if (evt.jobId != null) setEvalQueueIds(prev => { const n = new Set(prev); n.delete(evt.jobId!); return n })
         setEvalToast({ text: `Evaluated ${evt.done !== undefined ? evt.done + 1 : '?'}/${evt.total ?? '?'} · score ${evt.score}`, severity: 'info' })
+        // A successful eval clears the credit-low banner — whatever was wrong is now resolved.
+        setCreditsLow(null)
         void loadJobs(); void loadStats()
       }
       if (evt.type === 'eval_all_done') { setEvaluating(false); setEvalQueueIds(new Set()); setEvalToast({ text: 'Evaluation complete', severity: 'success' }); void loadJobs(); void loadStats() }
@@ -532,7 +559,14 @@ export function PipelinePage() {
     setEvalToast({ text: 'Starting evaluation...', severity: 'info' })
     try {
       const result = await api.evaluate(opts)
-      if (result.queued === 0) { setEvaluating(false); setEvalToast({ text: 'No jobs to evaluate — run Scan first or check Inbox', severity: 'warning' }) }
+      if (result.queued === 0) {
+        setEvaluating(false)
+        if (result.reason === 'busy') {
+          setEvalToast({ text: 'Evaluation already running — wait for the current batch to finish', severity: 'info' })
+        } else {
+          setEvalToast({ text: 'No jobs to evaluate — run Scan first or check Inbox', severity: 'warning' })
+        }
+      }
     } catch (err) { setEvaluating(false); setEvalToast({ text: `Evaluate failed: ${err}`, severity: 'error' }) }
   }
 
@@ -592,6 +626,24 @@ export function PipelinePage() {
     window.addEventListener('eval-job-start', onStart)
     window.addEventListener('eval-job-done', onDone)
     return () => { window.removeEventListener('eval-job-start', onStart); window.removeEventListener('eval-job-done', onDone) }
+  }, [])
+
+  // Sync the EVALUATE button with backend run state. Critical for the
+  // page-reload case: if a batch is running on the server when the user
+  // hard-refreshes, the SSE handshake replays {type:'eval_state', running:true}
+  // and the button stays disabled instead of letting them double-trigger.
+  useEffect(() => {
+    const onState = (e: Event) => setEvaluating(!!(e as CustomEvent<{ running: boolean }>).detail.running)
+    const onCredits = (e: Event) => {
+      const detail = (e as CustomEvent<{ message: string; kind: string }>).detail
+      setCreditsLow({ message: detail.message, kind: detail.kind })
+    }
+    window.addEventListener('eval-state', onState)
+    window.addEventListener('eval-credits-low', onCredits)
+    return () => {
+      window.removeEventListener('eval-state', onState)
+      window.removeEventListener('eval-credits-low', onCredits)
+    }
   }, [])
 
   useEffect(() => { setSelectionModel([]) }, [tab])
@@ -883,6 +935,26 @@ export function PipelinePage() {
       {/* ── Pipeline table ──────────────────────────────────────────────── */}
       <Box sx={{ flex: { xs: 'none', sm: 1 }, overflow: { xs: 'visible', sm: 'hidden' }, display: 'flex', flexDirection: 'column', p: 2, pt: 1.5, gap: 1.5 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, px: 0.5 }}>Pipeline</Typography>
+
+        {/* Persistent banner for Anthropic-side eval failures (credits, rate
+            limit, auth). Cleared on the next successful eval, or by user. */}
+        {creditsLow && (
+          <Alert
+            severity="error"
+            onClose={() => setCreditsLow(null)}
+            sx={{ '& .MuiAlert-message': { fontSize: '0.85rem' } }}
+          >
+            {creditsLow.kind === 'credits' && (
+              <>Anthropic API credits exhausted. Top up at <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noreferrer">console.anthropic.com</a> and click EVALUATE again.</>
+            )}
+            {creditsLow.kind === 'rate_limit' && (
+              <>Anthropic rate limit hit. Wait a minute and click EVALUATE again.</>
+            )}
+            {creditsLow.kind === 'auth' && (
+              <>Anthropic authentication failed. Re-check your API key, then click EVALUATE again.</>
+            )}
+          </Alert>
+        )}
 
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: { xs: 'visible', sm: 'hidden' }, flex: { xs: 'none', sm: 1 }, display: 'flex', flexDirection: 'column' }}>
           <Tabs
