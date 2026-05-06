@@ -22,6 +22,15 @@ config/resume.pdf
 config/filters.yml
 config/*.local.*
 
+# Variant CVs and profile overlays (personal data, never committed).
+# Code expects loadCv('healthcare') -> config/cv-healthcare.md, etc.
+config/cv-*.md
+config/cv-*.pdf
+config/profile-*.yml
+
+# One-shot migration script (delete after running)
+/finalize-renderer-migration.sh
+
 # OS / editor cruft
 .DS_Store
 *.log
