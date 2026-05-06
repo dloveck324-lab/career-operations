@@ -1,0 +1,9 @@
+# Tailored render outputs and any HTML drafts the Claude skill writes here.
+# These contain personal data (name, contact, employment history) and never
+# belong in a public repo.
+output/
+*.pdf
+*.local.html
+
+# Trigger file used by watch-and-render.sh
+.render-trigger

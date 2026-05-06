@@ -1,0 +1,15 @@
+{
+  "name": "@career-operations/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HTML to PDF rendering for tailored resumes and cover letters. Uses Playwright headless Chromium with font-base64 embedding and screen-media workarounds for ATS-parseable output.",
+  "type": "module",
+  "main": "./generate-pdf.mjs",
+  "scripts": {
+    "render": "node generate-pdf.mjs",
+    "watch": "./scripts/watch-and-render.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}
