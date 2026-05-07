@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{NAME}} — Cover Letter</title>
+<title>{{NAME}} - Cover Letter</title>
 <style>
   /* Static font instances. Variable fonts (weight ranges, opsz axis on DM Sans)
      mishandle text positioning in Chromium's PDF backend. Static instances at
@@ -103,6 +103,23 @@
     margin-top: 2px;
   }
 
+  /* === OPTIONAL APPLIED AI PROJECTS LIST ===
+     Sits between body paragraphs and the closing paragraph when the JD warrants
+     a project mention. The {{LIST_INTRO}} token is a transition <div class="paragraph">
+     that bridges the body to the bullet list; {{PROJECTS_LIST}} is the <ul>. The
+     skill emits empty strings for both when no projects section is needed. */
+  .cover-letter-projects-list {
+    list-style: disc;
+    padding-left: 16px;
+    margin: 0 0 16px 0;
+    font-size: 9.5px;
+    line-height: 1.5;
+    color: #2f2f2f;
+  }
+  .cover-letter-projects-list li { margin-bottom: 3px; }
+  .cover-letter-projects-list li:last-child { margin-bottom: 0; }
+  .cover-letter-projects-list li strong { color: #1a1a2e; font-weight: 600; }
+
   /* === PRINT === */
   @page { size: letter; margin: 0; }
   @media print {
@@ -146,6 +163,10 @@
 
   <!-- BODY PARAGRAPHS -->
   {{BODY_PARAGRAPHS}}
+
+  <!-- OPTIONAL APPLIED AI PROJECTS LIST (skill emits empty strings to skip) -->
+  {{LIST_INTRO}}
+  {{PROJECTS_LIST}}
 
   <!-- CLOSING -->
   <div class="closing-block">

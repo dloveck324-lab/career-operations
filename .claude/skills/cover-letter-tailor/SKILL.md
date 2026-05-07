@@ -67,6 +67,8 @@ The template at `packages/renderer/templates/cover-letter.html` exposes these to
 | `{{ROLE_TITLE}}` | From the JD (exact title, e.g., `Head of Product`) |
 | `{{SALUTATION}}` | `Dear <Hiring Manager Name>,` if known, otherwise `Dear <Company> Hiring Team,` |
 | `{{BODY_PARAGRAPHS}}` | 3 `<div class="paragraph">…</div>` blocks: opening, body, closing (per Pipeline step 6) |
+| `{{LIST_INTRO}}` | Optional transition paragraph that bridges the body to the projects list. Format: `<div class="paragraph" style="margin-bottom: 6px;">…</div>`. Emit empty string if the projects list is not included. |
+| `{{PROJECTS_LIST}}` | Optional `<ul class="cover-letter-projects-list">` with `<li>` items. Format per item: `<strong>Name</strong> (<a href="...">link</a>): description`. Descriptions verbatim from cv.md. Emit empty string if no projects section is needed. |
 | `{{CLOSING_LINE}}` | `Thank you for your consideration,` (or per `personal.local.md` preference) |
 | `{{SIGNATURE_BLOCK}}` | If `personal.local.md` defines `signature_image_path`, render `<img class="signature-img" src="data:image/png;base64,…">`. The renderer's font-base64 mechanism doesn't auto-embed images, so the skill must base64-encode and inline. If no signature path, emit empty string. |
 | `{{TYPED_TITLE}}` | Per `personal.local.md` (e.g., `Product Leader \| Applied AI \| YourPortfolio.com`) |
@@ -92,6 +94,29 @@ If `pageCount > 1`:
 5. Never cut the closing paragraph (it carries the call to action).
 
 If trimming the body still leaves you over 1 page, ask the user: do you want to drop a proof point or shorten the opening?
+
+## Projects mini-section (optional)
+
+Some JDs warrant a compact bullet list of relevant side projects between the body paragraph and the closing paragraph. Use it when:
+
+- The JD emphasizes hands-on AI/ML work, building, or shipping (Savas, AI platform roles, build-phase startups).
+- The candidate's `cv.md` has an Applied AI Projects section with content directly relevant to the JD's vertical or technical stack.
+
+Skip it when:
+
+- The JD is for a senior-management or strategy role with no signal about hands-on work.
+- Including it would push the cover letter past 1 page (the 1-page enforcement loop drops it before trimming the body).
+
+**Format:**
+
+1. **`{{LIST_INTRO}}`** is one short transition sentence as a `<div class="paragraph" style="margin-bottom: 6px;">…</div>`. The sentence connects the body's theme to the bullets and references the candidate's primary employer. Examples:
+   - `Outside of <employer>, I've been productizing the same AI-first approach across three side projects:`
+   - `These same instincts show up in side projects I've shipped on my own time:`
+   - Avoid generic resume-style headers like `Applied AI Projects` as a section heading. Cover letters are prose; the transition sentence is the framing.
+
+2. **`{{PROJECTS_LIST}}`** is a `<ul class="cover-letter-projects-list">` with `<li>` items. Each item: `<strong>Name</strong> (<a href="...">link</a>): one-sentence description`. Pull descriptions from cv.md verbatim. 2-3 projects max. Order by JD relevance (most-relevant project first).
+
+If you skip the section, emit empty string (`""`) for both tokens. The template renders cleanly with empty values.
 
 ## Cover letter accuracy guard — CENTERPIECE
 
