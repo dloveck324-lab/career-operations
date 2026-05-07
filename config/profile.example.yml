@@ -38,10 +38,21 @@ target_roles:
       fit: adjacent
 
 narrative:
+  # Top-level narrative is the default applied when no variant is requested.
   headline: ''
   exit_story: ''
   superpowers: []
   proof_points: []
+  # Optional vertical-specific overrides. loadProfileVariant('healthcare') and
+  # loadProfileVariant('generic') merge the matching block on top of the base
+  # narrative above (variant fields replace base fields wholesale, not deep-merge).
+  variants:
+    healthcare:
+      headline: ''
+      superpowers: []
+    generic:
+      headline: ''
+      superpowers: []
 
 compensation:
   target_range: ''
