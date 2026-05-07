@@ -4,7 +4,15 @@ description: Generate a tailored, ATS-optimized resume PDF for a specific job de
 user-invocable: true
 ---
 
-You generate tailored, ATS-optimized resume PDFs for David Lovecchio. Output must be a single page, fully ATS-parseable, and never invent content. Follow every rule in this file. The renderer at `packages/renderer/generate-pdf.mjs` produces the PDF; this skill produces the tailored HTML that feeds it.
+You generate tailored, ATS-optimized resume PDFs. Output must be a single page, fully ATS-parseable, and never invent content. Follow every rule in this file. The renderer at `packages/renderer/generate-pdf.mjs` produces the PDF; this skill produces the tailored HTML that feeds it.
+
+## Personal overlay (load FIRST)
+
+Before applying any rule below, load `.claude/skills/resume-tailor/personal.local.md` from this folder if it exists. That file holds candidate-specific accuracy guardrails: sacred bullets, personal phrasing rules, education spelling preferences, project names, and vertical-specific tailoring (e.g., healthcare EHR/EMR conventions).
+
+If `personal.local.md` is present, its rules take precedence over any conflicting defaults below.
+
+If it's not present, see `.claude/skills/resume-tailor/personal.example.md` for the expected structure and apply only the generic defaults in this file.
 
 ## Pipeline
 
@@ -13,16 +21,16 @@ You generate tailored, ATS-optimized resume PDFs for David Lovecchio. Output mus
 3. If the JD is not in context, ask the user for it (text or URL). If a URL, fetch the page and extract the JD text.
 4. Extract 15-20 high-signal keywords from the JD (skills, tools, domain terms, role responsibilities). Cluster them by relevance.
 5. Detect role archetype from the JD (AI platform, agentic workflows, technical PM, solutions architect, transformation lead, etc.) and use it to shape the framing.
-6. Rewrite Professional Summary (3-4 lines) to inject the highest-priority JD keywords plus David's exit narrative. The exit narrative should signal availability and direction, not explain departure circumstances.
+6. Rewrite Professional Summary (3-4 lines) to inject the highest-priority JD keywords plus the candidate's exit narrative if relevant.
 7. Build Core Competencies grid: pull from `cv-<variant>.md` baseline (~12-13 tags). Healthcare-priority order in `cv-healthcare.md`. **Hard rule: must render in EXACTLY 2 lines, never 3** (see Core Competencies 2-line rule below). Swap a small number of baseline tags for JD-specific ones if the JD demands, but keep the total count at the 2-line cap.
-8. Tailor experience bullets per role: reorder by JD relevance, reframe wording to surface JD keywords, **never invent metrics**. eVisit bullets are sacred (see Accuracy guardrails).
+8. Tailor experience bullets per role: reorder by JD relevance, reframe wording to surface JD keywords, **never invent metrics**. **Sacred bullets defined in `personal.local.md` are NOT trimmable.**
 9. Read the template at `packages/renderer/templates/resume.html`. Substitute every `{{TOKEN}}` with the rendered content. Use the section labels from the **Template fill map** below verbatim.
 10. Write the filled HTML to `/tmp/resume-tailored-<company-slug>-<YYYY-MM-DD>.html`.
 11. Render the PDF:
     ```bash
     node packages/renderer/generate-pdf.mjs \
       /tmp/resume-tailored-<company-slug>-<YYYY-MM-DD>.html \
-      packages/renderer/output/resume-david-<company-slug>-<YYYY-MM-DD>.pdf
+      packages/renderer/output/resume-<candidate-slug>-<company-slug>-<YYYY-MM-DD>.pdf
     ```
 12. Run the **Post-generation verification** checklist before reporting done.
 13. Report: PDF path, page count, file size, plus a one-line summary of which bullets were reordered or which keywords were injected.
@@ -45,24 +53,24 @@ The template at `packages/renderer/templates/resume.html` exposes these tokens. 
 | Token | Value the skill must emit |
 |---|---|
 | `{{LANG}}` | `en` |
-| `{{NAME}}` | From `config/profile.yml` (`David Lovecchio`) |
+| `{{NAME}}` | From `config/profile.yml` |
 | `{{PHONE}}` | From profile |
 | `{{EMAIL}}` | From profile |
 | `{{LINKEDIN_URL}}` | From profile |
-| `{{LINKEDIN_DISPLAY}}` | `linkedin.com/in/dave-lovecchio` |
+| `{{LINKEDIN_DISPLAY}}` | From `personal.local.md` (e.g., `linkedin.com/in/<handle>`) |
 | `{{PORTFOLIO_URL}}` | From profile |
-| `{{PORTFOLIO_DISPLAY}}` | `DavidGLovecchio.com` |
-| `{{LOCATION}}` | From profile (`Scottsdale, AZ 85251`) |
+| `{{PORTFOLIO_DISPLAY}}` | From `personal.local.md` (e.g., `<YourDomain>.com`) |
+| `{{LOCATION}}` | From profile |
 | `{{SECTION_SUMMARY}}` | `Professional Summary` |
 | `{{SUMMARY_TEXT}}` | Tailored 3-4 line summary (see Pipeline step 6) |
-| `{{SECTION_PROJECTS}}` | `Applied AI Projects` |
+| `{{SECTION_PROJECTS}}` | `Applied AI Projects` (or whatever the candidate's projects section is named per `personal.local.md`) |
 | `{{PROJECTS}}` | `<ul class="projects-list"><li>` bullets, one per project. Format: `<strong>Name</strong> (<a href="...">link</a>): description`. Descriptions verbatim from cv.md, no card layout |
 | `{{SECTION_COMPETENCIES}}` | `Core Competencies` |
 | `{{COMPETENCIES}}` | `<span class="competency-tag">` elements pulled from `cv-<variant>.md` baseline (~12-13 tags, 2-line cap) |
 | `{{SECTION_EXPERIENCE}}` | **`Professional Experience`** (NOT "Work Experience" — Jobscan rejects that label) |
 | `{{EXPERIENCE}}` | Tailored job blocks, reverse chronological. Each block: `<div class="job"><div class="job-header"><span class="job-role">ROLE</span><span class="job-period">DATES</span></div><div class="job-company">COMPANY</div><ul class="bullets">…</ul></div>`. **Role on top, company below.** |
 | `{{SECTION_LEADERSHIP}}` | `Leadership & Mentorship` |
-| `{{LEADERSHIP}}` | `<div class="leadership-item">` divs (4 expected, render in 2-column grid via `.leadership-grid`). Each: `<strong>Title:</strong> Description` |
+| `{{LEADERSHIP}}` | `<div class="leadership-item">` divs (rendered in 2-column grid via `.leadership-grid`). Each: `<strong>Title:</strong> Description` |
 | `{{SECTION_EDUCATION}}` | `Education` |
 | `{{EDUCATION}}` | `<div class="edu-item"><span class="edu-title">DEGREE</span> | <span class="edu-org">SCHOOL</span></div>` per entry |
 | `{{SECTION_SKILLS}}` | `Skills` |
@@ -72,10 +80,10 @@ The template at `packages/renderer/templates/resume.html` exposes these tokens. 
 
 The Core Competencies block must render in EXACTLY 2 lines. NEVER 3 lines. Aim for line 2 as FULL as possible without overflowing.
 
-- Healthcare tags first when using `cv-healthcare.md` (Enterprise Health Systems, EHR Integration, Clinical Decision Support, Telehealth & Virtual Care, KLAS Excellence, etc.).
+- Healthcare tags first when using `cv-healthcare.md` (industry-specific tags before general PM tags).
 - **Iterate both directions.** If a render shows 3 lines, drop the lowest-priority tail tag and re-render. **If line 2 is noticeably under-full (e.g., 2-3 tags on line 2 when line 1 has 6-7), ADD a tag and re-render.** Don't settle for 1.5 lines.
 - The cv-*.md baselines should themselves contain a count that yields 2 full lines under the renderer's CSS (8.5px font, gap 3px 6px, padding 2px 6px). Empirically that's around 13 tags. Don't bloat the baseline beyond what fits.
-- **Pricing & Packaging:** include this tag in the baseline AND in the tailored render whenever the JD mentions pricing, packaging, commercial strategy, GTM monetization, or revenue-model decisions. David has documented pricing wins (e.g., Twilio packaging led to $250K new ARR). Drop only if the JD has zero commercial signal AND the line is overflowing.
+- **Pricing & Packaging** (or equivalent commercial-strategy tag): include in the tailored render whenever the JD mentions pricing, packaging, commercial strategy, GTM monetization, or revenue-model decisions. Drop only if the JD has zero commercial signal AND the line is overflowing.
 - Verify every render: open the PDF visually, OR `pdftotext -layout` the output and count the wrapped lines between `Core Competencies` and `Professional Experience`.
 
 ## Date format
@@ -95,34 +103,36 @@ After every render, check the page count from generate-pdf.mjs.
 
 If `pageCount > 1`:
 
-1. Score every trimmable bullet against the JD. **Bullets in eVisit roles are NOT trimmable.**
+1. Score every trimmable bullet against the JD. **Bullets in roles flagged as sacred per `personal.local.md` are NOT trimmable.**
 2. Drop the lowest-scoring bullet.
 3. Regenerate.
 4. Check page count again.
 5. Repeat until `pageCount === 1`.
-6. Never exit with a 2-page PDF. Never trim an eVisit bullet. Never leave any role with zero bullets.
+6. Never exit with a 2-page PDF. Never trim a sacred bullet. Never leave any role with zero bullets.
 
 If you cannot reach a single page without violating these rules, stop and report the constraint conflict to the user. Do not deliver a 2-page PDF.
 
 ## Job-block consolidation
 
-When fitting one page would force trimming an entire role, consider merging consecutive related roles instead of dropping. Example: J&J Medical Devices (2016-2017) and J&J Ethicon (2015-2016) merge cleanly into one block titled "Senior Product Manager & Business IT Analyst" at "J&J Medical Devices / J&J Ethicon" (2015-2017). Two combined bullets, one job header. Saves ~3 lines of vertical space without losing content. Use only when the consolidation reads naturally.
+When fitting one page would force trimming an entire role, consider merging consecutive related roles instead of dropping. Example: two adjacent roles at sister companies in the same year range can merge into one block titled "Role A & Role B" at "Company A / Company B" (combined date range, combined bullets, one job header). Saves vertical space without losing content. Use only when the consolidation reads naturally.
 
-## Accuracy guardrails — VERBATIM
+## Accuracy guardrails — DEFAULTS
 
-- **Never** say David "built" or "scaled" the product org from 4 to 17. The correct framing: "directly manages cross-functional product and engineering pods within a product org that grew from 4 to 17 during his tenure."
-- **Never** invent metrics, titles, dates, or experience not in `cv-<variant>.md`.
-- **Never** abbreviate education. Always: "Master of Business Administration (MBA)" and "Penn State University". **Do not write "Pennsylvania State University".** It's "Penn State University" or "Penn State", that's how David refers to his alma mater.
-- Keyword injection must reframe existing experience, not add new claims.
+These are the universal defaults. The candidate's `personal.local.md` overrides them with specific phrasing, sacred bullets, and education spelling preferences.
 
-## Cover letter accuracy guard (preserved for when cover letter template lands)
+- **Never invent** metrics, titles, dates, or experience not in `cv-<variant>.md`.
+- **Keyword injection must reframe existing experience**, not add new claims. If the JD asks for a skill that's nowhere in cv.md, do not insert it. Surface the closest adjacent experience instead.
+- **Never abbreviate institution names** without explicit instruction in `personal.local.md`. Default to the full official name (e.g., "Master of Business Administration" not "MBA" alone, "University of California, Berkeley" not "UC Berkeley") unless personal.local.md says otherwise.
+- See `personal.local.md` for candidate-specific framings (preferred role descriptions, sacred phrasings, banned wordings).
+
+## Cover letter accuracy guard
 
 Cover letter content MUST come exclusively from `cv-<variant>.md`. No exceptions.
 
-- Never reference a target company's customer names, investor names, partnerships, or third-party companies as if David has personal experience with them.
-- Evaluation reports contain target-company research (e.g., "Yale New Haven and Stanford are Clarium customers"). This is context about the prospect, not David's background.
-- Acceptable: "At eVisit, I built products serving 35K beds across all 50 states." (from cv.md)
-- Forbidden: "...serving Yale New Haven and Stanford-caliber organizations." (from a research report, not David's experience)
+- Never reference a target company's customer names, investor names, partnerships, or third-party companies as if the candidate has personal experience with them.
+- Evaluation reports contain target-company research (e.g., "[Target] customers include [BigCo, MidCo, SmallCo]"). This is context about the prospect, not the candidate's background.
+- Acceptable: `At [my employer], I built products serving [my employer's customers].` (from cv.md)
+- Forbidden: `...serving [BigCo]-caliber organizations.` (from a research report, not the candidate's experience)
 
 If you are not 100% certain a statement comes directly from `cv.md`, do not include it.
 
@@ -145,11 +155,11 @@ If you are not 100% certain a statement comes directly from `cv.md`, do not incl
 1. Header (name, teal rule, contact row)
 2. Professional Summary (3-4 lines, keyword-dense)
 3. Applied AI Projects (sits between Summary and Competencies, bullet list format)
-4. Core Competencies (12-13 tags, 2-line cap, healthcare-first)
+4. Core Competencies (12-13 tags, 2-line cap, healthcare-first when applicable)
 5. Professional Experience (reverse chronological, role-on-top)
 6. Leadership & Mentorship (2-column grid)
 7. Education
-8. Skills (label/content grid; Healthcare row first when using cv-healthcare.md)
+8. Skills (label/content grid; vertical-specific row first when applicable)
 
 ## Post-generation verification — ALWAYS RUN
 
@@ -159,7 +169,7 @@ Before reporting done:
 2. **Bullets present** — read the rendered HTML and confirm every `.job` block has at least one `<li>`.
 3. **Page count = 1** — confirm against the script's reported page count.
 4. **Core Competencies = 2 lines** — verify visually OR via `pdftotext -layout`. If 3 lines, drop tail tags and re-render.
-5. **Spot-check content** — Professional Summary present, Applied AI Projects section present, eVisit bullets all present (eVisit is the primary proof point and must never be trimmed).
+5. **Spot-check content** — Professional Summary present, Applied AI Projects section present, sacred bullets per `personal.local.md` all present.
 6. **Section labels** — confirm the rendered text layer reads `Professional Experience` and `Education` (not `WORK EXPERIENCE` / `EDUCATION`). Run `pdftotext` if uncertain.
 
 Never report the PDF as done without all six checks.
@@ -169,7 +179,7 @@ Never report the PDF as done without all six checks.
 Reply with:
 
 ```
-PDF: packages/renderer/output/resume-david-<slug>-<date>.pdf
+PDF: packages/renderer/output/resume-<candidate>-<slug>-<date>.pdf
 Pages: 1
 Competencies lines: 2
 Size: <N> KB
