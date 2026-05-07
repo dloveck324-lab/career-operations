@@ -28,6 +28,11 @@ config/cv-*.md
 config/cv-*.pdf
 config/profile-*.yml
 
+# Personal-overlay files for skills (e.g., resume-tailor/personal.local.md).
+# Each user keeps their own customization gitignored; the *.example.md
+# template stays committed.
+*.local.md
+
 # One-shot migration script (delete after running)
 /finalize-renderer-migration.sh
 
