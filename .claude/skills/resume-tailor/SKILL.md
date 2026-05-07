@@ -14,7 +14,7 @@ You generate tailored, ATS-optimized resume PDFs for David Lovecchio. Output mus
 4. Extract 15-20 high-signal keywords from the JD (skills, tools, domain terms, role responsibilities). Cluster them by relevance.
 5. Detect role archetype from the JD (AI platform, agentic workflows, technical PM, solutions architect, transformation lead, etc.) and use it to shape the framing.
 6. Rewrite Professional Summary (3-4 lines) to inject the highest-priority JD keywords plus David's exit narrative. The exit narrative should signal availability and direction, not explain departure circumstances.
-7. Build Core Competencies grid: 6-8 short keyword phrases pulled from JD requirements, blended with David's existing competencies from cv.md.
+7. Build Core Competencies grid: pull from `cv-<variant>.md` baseline (~12-13 tags). Healthcare-priority order in `cv-healthcare.md`. **Hard rule: must render in EXACTLY 2 lines, never 3** (see Core Competencies 2-line rule below). Swap a small number of baseline tags for JD-specific ones if the JD demands, but keep the total count at the 2-line cap.
 8. Tailor experience bullets per role: reorder by JD relevance, reframe wording to surface JD keywords, **never invent metrics**. eVisit bullets are sacred (see Accuracy guardrails).
 9. Read the template at `packages/renderer/templates/resume.html`. Substitute every `{{TOKEN}}` with the rendered content. Use the section labels from the **Template fill map** below verbatim.
 10. Write the filled HTML to `/tmp/resume-tailored-<company-slug>-<YYYY-MM-DD>.html`.
@@ -55,18 +55,28 @@ The template at `packages/renderer/templates/resume.html` exposes these tokens. 
 | `{{LOCATION}}` | From profile (`Scottsdale, AZ 85251`) |
 | `{{SECTION_SUMMARY}}` | `Professional Summary` |
 | `{{SUMMARY_TEXT}}` | Tailored 3-4 line summary (see Pipeline step 6) |
-| `{{SECTION_COMPETENCIES}}` | `Core Competencies` |
-| `{{COMPETENCIES}}` | 6-8 `<span class="competency-tag">` elements |
-| `{{SECTION_EXPERIENCE}}` | **`Professional Experience`** (NOT "Work Experience" — Jobscan rejects that label) |
-| `{{EXPERIENCE}}` | Tailored job blocks, reverse chronological |
 | `{{SECTION_PROJECTS}}` | `Applied AI Projects` |
-| `{{PROJECTS}}` | Vecchio, Furniture Curator, Career-ops (from cv.md) |
+| `{{PROJECTS}}` | `<ul class="projects-list"><li>` bullets, one per project. Format: `<strong>Name</strong> (<a href="...">link</a>): description`. Descriptions verbatim from cv.md, no card layout |
+| `{{SECTION_COMPETENCIES}}` | `Core Competencies` |
+| `{{COMPETENCIES}}` | `<span class="competency-tag">` elements pulled from `cv-<variant>.md` baseline (~12-13 tags, 2-line cap) |
+| `{{SECTION_EXPERIENCE}}` | **`Professional Experience`** (NOT "Work Experience" — Jobscan rejects that label) |
+| `{{EXPERIENCE}}` | Tailored job blocks, reverse chronological. Each block: `<div class="job"><div class="job-header"><span class="job-role">ROLE</span><span class="job-period">DATES</span></div><div class="job-company">COMPANY</div><ul class="bullets">…</ul></div>`. **Role on top, company below.** |
+| `{{SECTION_LEADERSHIP}}` | `Leadership & Mentorship` |
+| `{{LEADERSHIP}}` | `<div class="leadership-item">` divs (4 expected, render in 2-column grid via `.leadership-grid`). Each: `<strong>Title:</strong> Description` |
 | `{{SECTION_EDUCATION}}` | `Education` |
-| `{{EDUCATION}}` | MBA + BS entries (see Education spelling rule) |
-| `{{SECTION_CERTIFICATIONS}}` | `Certifications` (omit the entire section block if there's no content) |
-| `{{CERTIFICATIONS}}` | Empty unless cv.md has certs |
+| `{{EDUCATION}}` | `<div class="edu-item"><span class="edu-title">DEGREE</span> | <span class="edu-org">SCHOOL</span></div>` per entry |
 | `{{SECTION_SKILLS}}` | `Skills` |
-| `{{SKILLS}}` | The Skills section from cv.md, formatted as `.skill-item` blocks |
+| `{{SKILLS}}` | `<div class="skills-grid">` with alternating `<div class="skill-category">` and `<div class="skill-item">` children (label/content grid). Healthcare row first when using cv-healthcare.md |
+
+## Core Competencies 2-line rule
+
+The Core Competencies block must render in EXACTLY 2 lines. NEVER 3 lines. Aim for line 2 as FULL as possible without overflowing.
+
+- Healthcare tags first when using `cv-healthcare.md` (Enterprise Health Systems, EHR Integration, Clinical Decision Support, Telehealth & Virtual Care, KLAS Excellence, etc.).
+- **Iterate both directions.** If a render shows 3 lines, drop the lowest-priority tail tag and re-render. **If line 2 is noticeably under-full (e.g., 2-3 tags on line 2 when line 1 has 6-7), ADD a tag and re-render.** Don't settle for 1.5 lines.
+- The cv-*.md baselines should themselves contain a count that yields 2 full lines under the renderer's CSS (8.5px font, gap 3px 6px, padding 2px 6px). Empirically that's around 13 tags. Don't bloat the baseline beyond what fits.
+- **Pricing & Packaging:** include this tag in the baseline AND in the tailored render whenever the JD mentions pricing, packaging, commercial strategy, GTM monetization, or revenue-model decisions. David has documented pricing wins (e.g., Twilio packaging led to $250K new ARR). Drop only if the JD has zero commercial signal AND the line is overflowing.
+- Verify every render: open the PDF visually, OR `pdftotext -layout` the output and count the wrapped lines between `Core Competencies` and `Professional Experience`.
 
 ## Date format
 
@@ -94,6 +104,10 @@ If `pageCount > 1`:
 
 If you cannot reach a single page without violating these rules, stop and report the constraint conflict to the user. Do not deliver a 2-page PDF.
 
+## Job-block consolidation
+
+When fitting one page would force trimming an entire role, consider merging consecutive related roles instead of dropping. Example: J&J Medical Devices (2016-2017) and J&J Ethicon (2015-2016) merge cleanly into one block titled "Senior Product Manager & Business IT Analyst" at "J&J Medical Devices / J&J Ethicon" (2015-2017). Two combined bullets, one job header. Saves ~3 lines of vertical space without losing content. Use only when the consolidation reads naturally.
+
 ## Accuracy guardrails — VERBATIM
 
 - **Never** say David "built" or "scaled" the product org from 4 to 17. The correct framing: "directly manages cross-functional product and engineering pods within a product org that grew from 4 to 17 during his tenure."
@@ -118,25 +132,24 @@ If you are not 100% certain a statement comes directly from `cv.md`, do not incl
 - No filler vocabulary: avoid `delve`, `unleash`, `harness`, `tapestry`, `navigate` (as metaphor), `leverage` (as verb), `robust`, `seamless`, `streamline`, `empower`, `bolster`, `foster`, `bespoke`, `holistic`, `multifaceted`, `crucial`, `vital`, `paramount`, `elevate`, `unveil`, `transformative`, `revolutionize`, `optimize` (use specific outcome instead), `end-to-end`, `best-in-class`, `cutting-edge`.
 - No "It's not just X, it's Y" reframes.
 - English only.
-- Leadership & Mentorship section: render as `<div>` elements, NOT `<ul><li>`.
 - Links must never break across lines (`a { white-space: nowrap }` is in the template CSS already).
 
 ## Page format — MANDATORY
 
 - Always US Letter (8.5in × 11in).
 - Render with `--format=letter` (or omit, since letter is default). **Never** pass `--format=a4`.
-- Zero Playwright margins. The template's `.page` div handles its own padding (0.38in × 0.5in).
+- Zero Playwright margins. The template's `.page` div handles its own padding (0.30in × 0.42in).
 
 ## Section order
 
 1. Header (name, teal rule, contact row)
 2. Professional Summary (3-4 lines, keyword-dense)
-3. Core Competencies (6-8 tags)
-4. Professional Experience (reverse chronological)
-5. Applied AI Projects
-6. Education
-7. (Certifications — only if non-empty)
-8. Skills
+3. Applied AI Projects (sits between Summary and Competencies, bullet list format)
+4. Core Competencies (12-13 tags, 2-line cap, healthcare-first)
+5. Professional Experience (reverse chronological, role-on-top)
+6. Leadership & Mentorship (2-column grid)
+7. Education
+8. Skills (label/content grid; Healthcare row first when using cv-healthcare.md)
 
 ## Post-generation verification — ALWAYS RUN
 
@@ -145,10 +158,11 @@ Before reporting done:
 1. **Font embedding** — generate-pdf.mjs output must show `Embedded font:` lines for each woff2 actually referenced. If any are missing, stop and fix.
 2. **Bullets present** — read the rendered HTML and confirm every `.job` block has at least one `<li>`.
 3. **Page count = 1** — confirm against the script's reported page count.
-4. **Spot-check content** — Professional Summary present, Applied AI Projects section present, eVisit bullets all present (eVisit is the primary proof point and must never be trimmed).
-5. **Section labels** — confirm the rendered text layer reads `Professional Experience` and `Education` (not `WORK EXPERIENCE` / `EDUCATION`). Run `pdftotext` if uncertain.
+4. **Core Competencies = 2 lines** — verify visually OR via `pdftotext -layout`. If 3 lines, drop tail tags and re-render.
+5. **Spot-check content** — Professional Summary present, Applied AI Projects section present, eVisit bullets all present (eVisit is the primary proof point and must never be trimmed).
+6. **Section labels** — confirm the rendered text layer reads `Professional Experience` and `Education` (not `WORK EXPERIENCE` / `EDUCATION`). Run `pdftotext` if uncertain.
 
-Never report the PDF as done without all five checks.
+Never report the PDF as done without all six checks.
 
 ## Report format
 
@@ -157,6 +171,7 @@ Reply with:
 ```
 PDF: packages/renderer/output/resume-david-<slug>-<date>.pdf
 Pages: 1
+Competencies lines: 2
 Size: <N> KB
 Variant: <generic|healthcare>
 Tailoring decisions:
