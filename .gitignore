@@ -28,6 +28,9 @@ config/cv-*.md
 config/cv-*.pdf
 config/profile-*.yml
 
+# Signature image for cover letters (personal asset, base64-embedded at render time)
+config/signature.*
+
 # Personal-overlay files for skills (e.g., resume-tailor/personal.local.md).
 # Each user keeps their own customization gitignored; the *.example.md
 # template stays committed.
