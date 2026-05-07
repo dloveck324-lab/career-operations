@@ -249,7 +249,42 @@ node scripts/represcreen.mjs             # apply
 
 These run on every meaningful feature, bugfix, or refactor. Claude does them proactively — never asks whether to commit, version-bump, or write tests.
 
-### 1. Commits — Conventional Commits, one per delivery
+### 1. Branching & Pull Requests — never commit directly to `main`
+
+`career-operations` is a shared repo. Every meaningful change goes through a feature branch and a Pull Request. Direct commits to `main` are not allowed.
+
+**The flow:**
+
+1. Sync `main`:
+   ```bash
+   git checkout main && git pull origin main
+   ```
+2. Create a branch (name = conventional-commit type, slash, short slug):
+   ```bash
+   git checkout -b feat/<slug>      # for new capabilities
+   git checkout -b fix/<slug>       # for bugfixes
+   git checkout -b chore/<slug>     # for build, docs, deps
+   git checkout -b refactor/<slug>  # for internal restructures
+   ```
+3. Commit on the branch (Conventional Commit format from rule 2 below).
+4. Push the branch:
+   ```bash
+   git push -u origin <branch-name>
+   ```
+   The push output prints a `https://github.com/.../pull/new/...` link.
+5. Open the PR on GitHub. Title = commit subject. Body = commit body.
+6. Review (self or collaborator). Merge via the GitHub UI; "Squash and merge" is the default for this repo.
+7. Pull `main` back down and delete the branch:
+   ```bash
+   git checkout main && git pull origin main && git branch -d <branch-name>
+   ```
+
+**Don't:**
+- Push directly to `main` (`git push origin main` from a `main` checkout). Branch protection on GitHub should block this; if it doesn't, treat that as an enforcement bug, not permission.
+- Force-push to `main` or any shared branch. Never use `--force` / `-f`.
+- Bundle unrelated changes into one branch. One PR = one delivery.
+
+### 2. Commits — Conventional Commits, one per delivery
 
 **Before cutting a feature branch from `main`:** run `git fetch && git status` and confirm `main` is in sync with `origin/main`. If `main` is behind, pull first; if ahead, the prior work hasn't been pushed yet — finish that PR before starting new work. The `.claude/hooks/git-sync-main.sh` SessionStart hook already does this on every session boot, but verify before branching anyway — sessions can be long.
 
@@ -276,9 +311,9 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 
 **Stage explicit paths** — `git add path/to/file.ts`, never `git add -A` or `git add .` (avoids accidentally committing `.env`, `config/profile.yml`, or stray local artifacts).
 
-**Pushing requires explicit user approval.** Commit locally; let the user run `git push` (or ask for permission first). Never `--force-push`. Never `--no-verify`.
+**Pushing the branch requires explicit user approval.** Push the feature branch with `git push -u origin <branch-name>` so a PR can be opened (rule 1). Never push to `main` directly. Never `--force-push`. Never `--no-verify`.
 
-### 2. Version bumps — SemVer, in the root `package.json`
+### 3. Version bumps — SemVer, in the root `package.json`
 
 Bump on the same commit as the change:
 
@@ -290,7 +325,7 @@ Bump on the same commit as the change:
 
 Pre-1.0 (current state): treat the **minor** as the de-facto major — bump it for any user-visible change, reserve patch for invisible work. Don't reset patch to 0 mid-stream just because you bumped minor in the same commit; let the file diff speak for itself.
 
-### 3. Unit tests — write alongside new logic
+### 4. Unit tests — write alongside new logic
 
 When you add or change code with branchable behavior — new utility, new prescreen rule, new parser, new query — add a `*.test.ts` next to it under the existing `__tests__/` directories (`apps/server/src/__tests__/`, `packages/core/src/__tests__/`). Use Vitest (`npm run test`).
 
@@ -298,7 +333,7 @@ A unit test belongs when there is **logic worth pinning**: a pure function, a pa
 
 The test must fail without the change. Cover the happy path plus one edge case (empty input, malformed input, boundary value). Do NOT mock the database in queries tests — use a real in-memory SQLite (the existing tests already do this).
 
-### 4. Functional tests — guard the cross-module flows
+### 5. Functional tests — guard the cross-module flows
 
 When you ship a feature that spans modules (route → query → SSE → UI; or scan → prescreen → eval), add an end-to-end test that exercises the whole path. These live alongside unit tests and use Vitest's `describe`/`it`.
 
@@ -311,7 +346,7 @@ Trigger checklist for a functional test:
 
 Run `npm run test` before committing. A red bar blocks the commit; fix the underlying cause, never `--no-verify`.
 
-### 5. Personal data — never commit, never log
+### 6. Personal data — never commit, never log
 
 The following paths contain real-user PII and **must never appear in a commit, screenshot, log line, or test fixture**:
 
