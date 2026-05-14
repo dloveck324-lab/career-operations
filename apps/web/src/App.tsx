@@ -63,7 +63,7 @@ function AuthedRoutes({ needsOnboarding }: { needsOnboarding: boolean }) {
     )
   }
 
-  if (needsOnboarding && pathname !== '/login') {
+  if (needsOnboarding && localStorage.getItem('onboardingDismissed') !== '1' && pathname !== '/login') {
     return <Navigate to="/welcome/welcome" replace />
   }
 
