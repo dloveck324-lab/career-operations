@@ -7,6 +7,7 @@ import { SettingsPage } from './pages/SettingsPage.js'
 import { LoginPage } from './pages/LoginPage.js'
 import { OnboardingPage } from './pages/OnboardingPage.js'
 import { api } from './api.js'
+import { shouldRedirectToOnboarding } from './onboardingGuard.js'
 
 export default function App() {
   const [checked, setChecked] = useState(false)
@@ -63,7 +64,7 @@ function AuthedRoutes({ needsOnboarding }: { needsOnboarding: boolean }) {
     )
   }
 
-  if (needsOnboarding && localStorage.getItem('onboardingDismissed') !== '1' && pathname !== '/login') {
+  if (shouldRedirectToOnboarding(needsOnboarding, pathname, localStorage.getItem('onboardingDismissed') === '1')) {
     return <Navigate to="/welcome/welcome" replace />
   }
 
