@@ -7,6 +7,7 @@ import {
   type JobStatus,
 } from '../db/queries.js'
 import { extractSkipTags } from '../claude/skip-tagger.js'
+import { recheckSingleJob } from '../scanner/link-checker.js'
 
 const JOB_STATUSES: JobStatus[] = ['scanned', 'prescreened', 'evaluated', 'ready_to_submit', 'applied', 'interview', 'completed', 'skipped']
 
@@ -37,6 +38,20 @@ export async function jobRoutes(app: FastifyInstance) {
       green_flags: flags.green,
       red_flags: flags.red,
     }
+  })
+
+  /**
+   * Per-job link recheck — used by the drawer's "Re-check" action so the
+   * user can verify a posting is still live before clicking Auto Apply.
+   * Synchronous: returns the result so the UI confirms immediately.
+   */
+  app.post('/jobs/:id/recheck', async (req) => {
+    const { id } = req.params as { id: string }
+    const numId = Number(id)
+    const job = getJob(numId)
+    if (!job) throw app.httpErrors.notFound('Job not found')
+    const result = await recheckSingleJob(numId)
+    return result
   })
 
   app.post('/jobs/bulk-status', async (req) => {

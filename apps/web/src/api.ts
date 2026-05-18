@@ -150,6 +150,8 @@ export const api = {
     req<{ ok: boolean; added: number; skipped: number }>('/settings/profile/blocklist', { method: 'PATCH', body: JSON.stringify({ list, terms }) }),
   scan: () => req<{ runId: number }>('/scan', { method: 'POST' }),
   pauseScan: () => req<{ ok: boolean }>('/scan/pause', { method: 'POST' }),
+  recheckLinks: () => req<{ runId: number }>('/scan/link-check', { method: 'POST' }),
+  recheckJob: (id: number) => req<{ status: 'active' | 'closed' | 'unknown'; updated: boolean }>(`/jobs/${id}/recheck`, { method: 'POST' }),
   evaluate: (opts?: { model?: 'haiku' | 'sonnet'; limit?: number; company?: string; ids?: number[] }) =>
     req<{ queued: number; reason?: 'busy' }>('/evaluate', { method: 'POST', body: JSON.stringify(opts ?? {}) }),
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
