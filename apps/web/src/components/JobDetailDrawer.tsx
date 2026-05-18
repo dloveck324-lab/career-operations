@@ -396,16 +396,15 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
 }
 
 /**
- * Strip the Pros/Cons bullets out of the legacy `score_reason` blob so we
- * can render them as discrete elements with per-line thumbs. Anything before
- * the first "Pros\n" or "Cons\n" marker is the header (dim line + verdict).
+ * Strip the Pros/Cons bullet sections out of the legacy `score_reason` blob
+ * so they don't duplicate with our structured per-line render. Matches the
+ * label at the start of any line — handles cases where the blob has no
+ * verdict prose and begins directly with "Pros\n...".
  */
 function splitEvalHeader(scoreReason: string): string {
-  const prosIdx = scoreReason.indexOf('\nPros\n')
-  const consIdx = scoreReason.indexOf('\nCons\n')
-  const candidates = [prosIdx, consIdx].filter(i => i >= 0)
-  if (candidates.length === 0) return scoreReason
-  return scoreReason.slice(0, Math.min(...candidates)).trim()
+  const m = scoreReason.match(/(?:^|\n)(?:Pros|Cons)\n/)
+  if (!m || m.index === undefined) return scoreReason
+  return scoreReason.slice(0, m.index).trim()
 }
 
 interface EvalBlockProps {
