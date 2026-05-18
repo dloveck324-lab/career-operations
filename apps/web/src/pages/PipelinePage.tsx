@@ -6,13 +6,14 @@ import {
   ToggleButton, Select, MenuItem, FormControl, InputLabel,
   Autocomplete, Divider, Menu, Snackbar, Alert,
   Accordion, AccordionSummary, AccordionDetails,
+  Link as MuiLink,
   useTheme, useMediaQuery,
 } from '@mui/material'
 import {
   Search, Close, Assessment, Pause, ArrowDropDown,
   LightMode, DarkMode, SettingsBrightness, Settings,
   SmartToyOutlined, MoreVert, ExpandMore, Lightbulb,
-  LinkOff,
+  LinkOff, OpenInNew,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -285,11 +286,50 @@ function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[]
   },
   {
     field: 'title', headerName: 'Role', flex: 2, minWidth: 200,
-    renderCell: ({ value }) => (
-      <Typography variant="body2" noWrap component="span">
-        {highlightKeywords(value as string, positiveKeywords)}
-      </Typography>
-    ),
+    renderCell: ({ value, row }) => {
+      const url = (row as Job).url
+      if (!url) {
+        return (
+          <Typography variant="body2" noWrap component="span">
+            {highlightKeywords(value as string, positiveKeywords)}
+          </Typography>
+        )
+      }
+      return (
+        <Tooltip title="Open job posting in a new tab" arrow placement="top">
+          <MuiLink
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            underline="hover"
+            color="inherit"
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              minWidth: 0,
+              cursor: 'pointer',
+              '&:hover .jd-ext-icon': { opacity: 1, color: 'primary.main' },
+            }}
+          >
+            <Typography variant="body2" noWrap component="span" sx={{ minWidth: 0 }}>
+              {highlightKeywords(value as string, positiveKeywords)}
+            </Typography>
+            <OpenInNew
+              className="jd-ext-icon"
+              sx={{
+                fontSize: 12,
+                opacity: 0.35,
+                flexShrink: 0,
+                color: 'text.secondary',
+                transition: 'opacity 120ms, color 120ms',
+              }}
+            />
+          </MuiLink>
+        </Tooltip>
+      )
+    },
   },
   {
     field: 'industry_vertical',
