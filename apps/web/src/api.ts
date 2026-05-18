@@ -69,6 +69,30 @@ export interface Job {
   eval_last_error_kind?: EvalErrorKind
   /** Raw JSON string from skip_tags column; parse before use */
   skip_tags?: string
+  /** Latest evaluation's green_flags (parsed) — populated by GET /jobs/:id */
+  green_flags?: string[]
+  /** Latest evaluation's red_flags (parsed) — populated by GET /jobs/:id */
+  red_flags?: string[]
+  /** Latest evaluation id — used as the FK when posting feedback */
+  evaluation_id?: number
+}
+
+export type EvalFeedbackFlagType = 'red' | 'green' | 'verdict' | 'score'
+
+export interface EvalFeedback {
+  id: number
+  evaluation_id: number
+  job_id: number
+  flag_type: EvalFeedbackFlagType
+  flag_text: string
+  correction: string | null
+  created_at: string
+}
+
+export interface Lesson {
+  flag_text: string
+  correction: string
+  flag_type: string
 }
 
 export interface TokenUsage { prompt: number; completion: number; total: number }
@@ -131,6 +155,14 @@ export const api = {
   pauseEvaluate: () => req<{ ok: boolean }>('/evaluate/pause', { method: 'POST' }),
   evaluateCompanies: () => req<string[]>('/evaluate/companies'),
   evaluateOne: (id: number, deep = false) => req<unknown>(`/evaluate/${id}`, { method: 'POST', body: JSON.stringify({ deep }) }),
+  submitFeedback: (jobId: number, data: { flag_type: EvalFeedbackFlagType; flag_text: string; correction?: string; evaluation_id?: number }) =>
+    req<{ ok: boolean; id: number; evaluation_id: number }>(`/jobs/${jobId}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  jobFeedback: (jobId: number) => req<EvalFeedback[]>(`/jobs/${jobId}/feedback`),
+  lessons: (limit = 20) => req<Lesson[]>(`/evaluations/lessons?limit=${limit}`),
   apply: (id: number, model: AutofillModel = 'haiku', variant?: ProfileVariant) =>
     req<AutofillStartResult>(`/apply/${id}`, { method: 'POST', body: JSON.stringify({ model, variant }) }),
   applyBulk: (ids: number[], model: AutofillModel = 'haiku', concurrency = 3) =>

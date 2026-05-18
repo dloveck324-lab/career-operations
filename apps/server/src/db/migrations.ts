@@ -159,4 +159,30 @@ export function runMigrations(db: DatabaseType): void {
   }
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_industry ON jobs(industry_vertical)`)
+
+  // Per-line feedback migration. Stores the green/red flag arrays from each
+  // eval as JSON so the UI can render them as discrete items and the user can
+  // thumbs-down individual lines. The feedback itself lives in eval_feedback
+  // and feeds back into the evaluator prompt as "lessons" on subsequent runs.
+  if (!hasColumn('evaluations', 'green_flags_json')) {
+    db.exec(`ALTER TABLE evaluations ADD COLUMN green_flags_json TEXT`)
+  }
+  if (!hasColumn('evaluations', 'red_flags_json')) {
+    db.exec(`ALTER TABLE evaluations ADD COLUMN red_flags_json TEXT`)
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS eval_feedback (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      evaluation_id INTEGER NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
+      job_id        INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      flag_type     TEXT NOT NULL,
+      flag_text     TEXT NOT NULL,
+      correction    TEXT,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_eval_feedback_job ON eval_feedback(job_id);
+    CREATE INDEX IF NOT EXISTS idx_eval_feedback_eval ON eval_feedback(evaluation_id);
+    CREATE INDEX IF NOT EXISTS idx_eval_feedback_created ON eval_feedback(created_at DESC);
+  `)
 }

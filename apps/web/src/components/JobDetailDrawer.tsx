@@ -2,12 +2,16 @@ import {
   Drawer, Box, Typography, Stack, Chip, Button, IconButton,
   Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, RadioGroup, FormControlLabel, Radio,
+  Popover, TextField,
   useTheme, useMediaQuery,
 } from '@mui/material'
-import { Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown } from '@mui/icons-material'
+import {
+  Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown,
+  ThumbDownAltOutlined, ThumbDownAlt,
+} from '@mui/icons-material'
 import { useState, useMemo, useEffect } from 'react'
 import { marked } from 'marked'
-import { api, type Job, type AutofillModel, type ProfileVariant } from '../api.js'
+import { api, type Job, type AutofillModel, type ProfileVariant, type EvalFeedback, type EvalFeedbackFlagType } from '../api.js'
 import { ScoreChip } from './ScoreChip.js'
 import { IndustryBadge } from './IndustryBadge.js'
 import { AutofillChatPanel } from './AutofillChatPanel.js'
@@ -34,10 +38,11 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
   const [pickedVariant, setPickedVariant] = useState<ProfileVariant>('generic')
   const [skipDialogOpen, setSkipDialogOpen] = useState(false)
   const [skipLoading, setSkipLoading] = useState(false)
+  const [feedbackRows, setFeedbackRows] = useState<EvalFeedback[]>([])
 
   // Reset chat panel + message when switching jobs; look up any active run for this job
   useEffect(() => {
-    if (!job) { setRunId(null); setRunStatus(null); setRunModel(null); setMessage(null); return }
+    if (!job) { setRunId(null); setRunStatus(null); setRunModel(null); setMessage(null); setFeedbackRows([]); return }
     setMessage(null)
     let cancelled = false
     api.applyRun(job.id).then(res => {
@@ -47,6 +52,8 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
         setRunModel(res.run?.model ?? null)
       }
     }).catch(() => { if (!cancelled) { setRunId(null); setRunStatus(null); setRunModel(null) } })
+    api.jobFeedback(job.id).then(rows => { if (!cancelled) setFeedbackRows(rows) })
+      .catch(() => { if (!cancelled) setFeedbackRows([]) })
     return () => { cancelled = true }
   }, [job?.id])
 
@@ -155,7 +162,28 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                   <OpenInNew sx={{ fontSize: 16 }} />
                 </IconButton>
               </Stack>
-              <Typography variant="subtitle2" color="text.secondary">{job.company}</Typography>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="subtitle2" color="text.secondary">{job.company}</Typography>
+                <Chip
+                  label={`#${job.id}`}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    navigator.clipboard.writeText(String(job.id)).then(() => {
+                      setMessage(`Copied #${job.id}`)
+                      setTimeout(() => setMessage(prev => prev === `Copied #${job.id}` ? null : prev), 1500)
+                    })
+                  }}
+                  sx={{
+                    fontFamily: 'monospace',
+                    fontSize: '0.65rem',
+                    height: 18,
+                    cursor: 'pointer',
+                    color: 'text.secondary',
+                    '& .MuiChip-label': { px: 0.75 },
+                  }}
+                />
+              </Stack>
             </Box>
             <IconButton onClick={onClose} size="small"><Close /></IconButton>
           </Stack>
@@ -170,11 +198,34 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
           </Stack>
 
           {job.score_reason && (
-            <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {job.score_reason}
-              </Typography>
-            </Box>
+            <EvalBlock
+              scoreReason={job.score_reason}
+              greenFlags={job.green_flags ?? []}
+              redFlags={job.red_flags ?? []}
+              feedbackRows={feedbackRows}
+              onSubmit={async (flag_type, flag_text, correction) => {
+                if (!job) return
+                try {
+                  const res = await api.submitFeedback(job.id, { flag_type, flag_text, correction })
+                  setFeedbackRows(prev => [
+                    {
+                      id: res.id,
+                      evaluation_id: res.evaluation_id,
+                      job_id: job.id,
+                      flag_type,
+                      flag_text,
+                      correction: correction ?? null,
+                      created_at: new Date().toISOString(),
+                    },
+                    ...prev,
+                  ])
+                  setMessage('Feedback saved — will be applied on the next eval.')
+                  setTimeout(() => setMessage(prev => prev?.startsWith('Feedback saved') ? null : prev), 2500)
+                } catch (err) {
+                  setMessage(`Couldn't save feedback: ${err instanceof Error ? err.message : String(err)}`)
+                }
+              }}
+            />
           )}
 
           {message && <Alert severity="info" sx={{ fontSize: '0.8rem' }}>{message}</Alert>}
@@ -341,5 +392,176 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
         onCancel={() => setSkipDialogOpen(false)}
       />
     </Drawer>
+  )
+}
+
+/**
+ * Strip the Pros/Cons bullets out of the legacy `score_reason` blob so we
+ * can render them as discrete elements with per-line thumbs. Anything before
+ * the first "Pros\n" or "Cons\n" marker is the header (dim line + verdict).
+ */
+function splitEvalHeader(scoreReason: string): string {
+  const prosIdx = scoreReason.indexOf('\nPros\n')
+  const consIdx = scoreReason.indexOf('\nCons\n')
+  const candidates = [prosIdx, consIdx].filter(i => i >= 0)
+  if (candidates.length === 0) return scoreReason
+  return scoreReason.slice(0, Math.min(...candidates)).trim()
+}
+
+interface EvalBlockProps {
+  scoreReason: string
+  greenFlags: string[]
+  redFlags: string[]
+  feedbackRows: EvalFeedback[]
+  onSubmit: (flag_type: EvalFeedbackFlagType, flag_text: string, correction?: string) => Promise<void>
+}
+
+function EvalBlock({ scoreReason, greenFlags, redFlags, feedbackRows, onSubmit }: EvalBlockProps) {
+  const header = splitEvalHeader(scoreReason)
+  const hasStructured = greenFlags.length > 0 || redFlags.length > 0
+
+  // Index already-flagged items so we can render filled thumbs on revisit.
+  const flaggedSet = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of feedbackRows) s.add(`${r.flag_type}:${r.flag_text}`)
+    return s
+  }, [feedbackRows])
+
+  return (
+    <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
+      {header && (
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', display: 'block' }}>
+          {header}
+        </Typography>
+      )}
+      {hasStructured ? (
+        <Stack spacing={1.5} sx={{ mt: header ? 1.5 : 0 }}>
+          {greenFlags.length > 0 && (
+            <FlagList
+              title="Pros"
+              flags={greenFlags}
+              flagType="green"
+              flaggedSet={flaggedSet}
+              onSubmit={onSubmit}
+            />
+          )}
+          {redFlags.length > 0 && (
+            <FlagList
+              title="Cons"
+              flags={redFlags}
+              flagType="red"
+              flaggedSet={flaggedSet}
+              onSubmit={onSubmit}
+            />
+          )}
+        </Stack>
+      ) : (
+        // Legacy fallback: render the full blob, no per-line thumbs available.
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', display: 'block' }}>
+          {scoreReason}
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+interface FlagListProps {
+  title: string
+  flags: string[]
+  flagType: EvalFeedbackFlagType
+  flaggedSet: Set<string>
+  onSubmit: (flag_type: EvalFeedbackFlagType, flag_text: string, correction?: string) => Promise<void>
+}
+
+function FlagList({ title, flags, flagType, flaggedSet, onSubmit }: FlagListProps) {
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+        {title}
+      </Typography>
+      <Stack spacing={0.25}>
+        {flags.map((flag, i) => (
+          <FlagRow
+            key={`${flagType}-${i}-${flag}`}
+            text={flag}
+            flagType={flagType}
+            isFlagged={flaggedSet.has(`${flagType}:${flag}`)}
+            onSubmit={onSubmit}
+          />
+        ))}
+      </Stack>
+    </Box>
+  )
+}
+
+interface FlagRowProps {
+  text: string
+  flagType: EvalFeedbackFlagType
+  isFlagged: boolean
+  onSubmit: (flag_type: EvalFeedbackFlagType, flag_text: string, correction?: string) => Promise<void>
+}
+
+function FlagRow({ text, flagType, isFlagged, onSubmit }: FlagRowProps) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const [correction, setCorrection] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const close = () => { setAnchor(null); setCorrection('') }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSubmit(flagType, text, correction.trim() || undefined)
+      close()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Stack direction="row" alignItems="flex-start" spacing={0.5}>
+      <Typography variant="caption" color="text.secondary" sx={{ flex: 1, lineHeight: 1.5 }}>
+        • {text}
+      </Typography>
+      <IconButton
+        size="small"
+        onClick={(e) => setAnchor(e.currentTarget)}
+        sx={{ p: 0.25, color: isFlagged ? 'warning.main' : 'text.disabled', '&:hover': { color: 'warning.main' } }}
+        title={isFlagged ? 'You flagged this — click to add another correction' : 'Flag as wrong / missing'}
+      >
+        {isFlagged ? <ThumbDownAlt sx={{ fontSize: 14 }} /> : <ThumbDownAltOutlined sx={{ fontSize: 14 }} />}
+      </IconButton>
+      <Popover
+        open={!!anchor}
+        anchorEl={anchor}
+        onClose={close}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { sx: { p: 1.5, width: 320 } } }}
+      >
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          Flag: <strong>{text}</strong>
+        </Typography>
+        <TextField
+          autoFocus
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={4}
+          size="small"
+          placeholder="What did the model miss? (e.g. comp range is in JD: $195K-$225K)"
+          value={correction}
+          onChange={(e) => setCorrection(e.target.value)}
+          disabled={saving}
+          sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
+        />
+        <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 1 }}>
+          <Button size="small" onClick={close} disabled={saving}>Cancel</Button>
+          <Button size="small" variant="contained" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </Stack>
+      </Popover>
+    </Stack>
   )
 }
