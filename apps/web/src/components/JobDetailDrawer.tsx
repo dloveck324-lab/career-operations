@@ -519,17 +519,35 @@ function FlagRow({ text, flagType, isFlagged, onSubmit }: FlagRowProps) {
   }
 
   return (
-    <Stack direction="row" alignItems="flex-start" spacing={0.5}>
-      <Typography variant="caption" color="text.secondary" sx={{ flex: 1, lineHeight: 1.5 }}>
+    <Stack
+      direction="row"
+      alignItems="flex-start"
+      spacing={0.5}
+      sx={{
+        py: 0.25,
+        borderRadius: 1,
+        transition: 'background-color 120ms',
+        '&:hover': { bgcolor: 'action.selected' },
+        '&:hover .flag-thumb': { color: 'warning.main', opacity: 1 },
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ flex: 1, lineHeight: 1.5, pl: 0.5 }}>
         • {text}
       </Typography>
       <IconButton
         size="small"
+        className="flag-thumb"
         onClick={(e) => setAnchor(e.currentTarget)}
-        sx={{ p: 0.25, color: isFlagged ? 'warning.main' : 'text.disabled', '&:hover': { color: 'warning.main' } }}
+        sx={{
+          p: 0.5,
+          mr: 0.25,
+          color: isFlagged ? 'warning.main' : 'text.secondary',
+          opacity: isFlagged ? 1 : 0.55,
+          transition: 'opacity 120ms, color 120ms',
+        }}
         title={isFlagged ? 'You flagged this — click to add another correction' : 'Flag as wrong / missing'}
       >
-        {isFlagged ? <ThumbDownAlt sx={{ fontSize: 14 }} /> : <ThumbDownAltOutlined sx={{ fontSize: 14 }} />}
+        {isFlagged ? <ThumbDownAlt sx={{ fontSize: 16 }} /> : <ThumbDownAltOutlined sx={{ fontSize: 16 }} />}
       </IconButton>
       <Popover
         open={!!anchor}
