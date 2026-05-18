@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { loadProfile, loadProfileVariant, loadCv, type ProfileVariant } from '@job-pipeline/core'
 import type { Job, ProfileVariantDb, EvalErrorKind } from '../db/schema.js'
+import { getRecentLessons } from '../db/queries.js'
 
 /**
  * Map a free-form Claude CLI error message to a structured kind so the UI
@@ -29,6 +30,9 @@ export interface ParsedEvalResponse {
   prompt_tokens: number
   completion_tokens: number
   raw_response: string
+  /** Raw arrays from the eval JSON — stored for per-line feedback in the UI. */
+  green_flags: string[]
+  red_flags: string[]
 }
 
 export interface EvalResult extends ParsedEvalResponse {
@@ -46,7 +50,43 @@ export interface EvaluateOptions {
   signal?: AbortSignal
 }
 
-const MAX_DESC_CHARS = 3000  // ~750 tokens
+const MAX_DESC_CHARS = 8000  // ~2000 tokens. Comp/benefits sections often
+                              // appear deep in JDs (after responsibilities,
+                              // perks, EEO). 3000 chars was cutting them off.
+const MAX_CV_CHARS = 3500    // up from 2000 — full headline + recent role bullets
+
+/**
+ * Pull a compensation snippet out of the raw JD before truncation, so the
+ * evaluator sees it even when it sits at char 12,000. Hits explicit ranges
+ * ("$195,000 - $225,000") and shorthand ("$200K base"). Returns null for
+ * vague "competitive"/"DOE" mentions — those add noise without signal.
+ */
+export function extractCompSnippet(description: string): string | null {
+  if (!description) return null
+  // Look for an explicit dollar-amount range or a single $XK figure with
+  // a money-context lead-in. We capture the full sentence/line as context
+  // so the evaluator can interpret (annual? equity? base? OTE?).
+  const patterns: RegExp[] = [
+    // "$195,000 - $225,000" or "$195K - $225K", optionally with USD/annual
+    /[^\n.]{0,80}\$\s?\d{2,3}[,\d]*[kK]?\s*[-–to]+\s*\$?\s?\d{2,3}[,\d]*[kK]?[^\n.]{0,80}/g,
+    // "$200K base" / "$200K salary" / "base pay: $200K"
+    /[^\n.]{0,40}(?:base|salary|compensation|target|OTE|pay)[^\n.]{0,40}\$\s?\d{2,3}[,\d]*[kK]?[^\n.]{0,40}/gi,
+    // "compensation: $195,000 to $225,000"
+    /(?:compensation|salary|pay)\s*(?:range)?\s*(?:is|:|of)?[^\n.]{0,160}/gi,
+  ]
+  for (const re of patterns) {
+    const matches = description.match(re)
+    if (!matches) continue
+    for (const m of matches) {
+      // Reject if it's only the lead-in word with no dollar sign — that
+      // catches "competitive compensation" and "compensation TBD".
+      if (/\$\s?\d/.test(m)) {
+        return m.trim().replace(/\s+/g, ' ').slice(0, 200)
+      }
+    }
+  }
+  return null
+}
 
 /**
  * Tier 2/3 evaluator (Step 4 of docs/DUAL_PROFILE_MIGRATION.md).
@@ -94,10 +134,30 @@ async function evaluateJobInternal(
   const deep = options.depth === 'deep'
   const model = options.modelOverride ?? (deep ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001')
 
-  const prompt = buildSkillPrompt(profile, cv, job, description)
+  const lessons = loadLessonsBlock(15)
+  const prompt = buildSkillPrompt(profile, cv, job, description, lessons)
   const raw = await runClaudeCli(prompt, model, options.signal)
   const parsed = parseEvalResponse(raw, model)
   return { ...parsed, profile_variant: variant }
+}
+
+/**
+ * Pull recent user-corrected feedback rows and format them as a prompt block.
+ * Returns an empty string if no actionable lessons exist — the block is then
+ * omitted entirely from the prompt to keep small evals lean.
+ */
+export function loadLessonsBlock(limit = 15): string {
+  let lessons: Array<{ flag_text: string; correction: string; flag_type: string }> = []
+  try {
+    lessons = getRecentLessons(limit)
+  } catch {
+    // DB error reading lessons must NEVER block an eval — degrade silently.
+    return ''
+  }
+  if (lessons.length === 0) return ''
+  const lines = lessons.map(l => `- When tempted to flag "${l.flag_text}" — user noted: ${l.correction}`)
+  return `LESSONS FROM PRIOR FEEDBACK (apply these before flagging — if a past lesson conflicts with your read of this JD, scan the JD again before committing to the flag):
+${lines.join('\n')}`
 }
 
 function buildSkillPrompt(
@@ -105,10 +165,15 @@ function buildSkillPrompt(
   cv: string | null,
   job: Job,
   description: string,
+  lessons = '',
 ): string {
   const desc = description.length > MAX_DESC_CHARS
     ? description.slice(0, MAX_DESC_CHARS) + '\n[truncated]'
     : description
+
+  // Scan the FULL description for comp before truncation. Guarantees the
+  // model sees comp even when it sits past MAX_DESC_CHARS.
+  const compFromDesc = extractCompSnippet(description)
 
   const candidateBlock = profile
     ? (() => {
@@ -124,19 +189,27 @@ VISA: ${profile.location.visa_status ?? 'N/A'}`
       })()
     : 'CANDIDATE: (profile not configured)'
 
-  const cvBlock = cv ? `\n\nCV (first 2000 chars):\n${cv.slice(0, 2000)}` : ''
+  const cvBlock = cv ? `\n\nCV (first ${MAX_CV_CHARS} chars):\n${cv.slice(0, MAX_CV_CHARS)}` : ''
+
+  const compLine = job.comp_text
+    ? `COMP: ${job.comp_text}`
+    : compFromDesc
+      ? `COMP: Not in structured field — extracted from JD body: "${compFromDesc}"`
+      : 'COMP: Not listed'
 
   const jobBlock = `JOB: ${job.title} @ ${job.company}
 LOCATION: ${job.location ?? 'Not specified'} | ${job.remote_policy ?? 'unknown'}
-COMP: ${job.comp_text ?? 'Not listed'}
+${compLine}
 URL: ${job.url}
 
 DESCRIPTION:
 ${desc}`
 
+  const lessonsBlock = lessons ? `\n\n${lessons}` : ''
+
   return `/job-evaluator
 
-${candidateBlock}${cvBlock}
+${candidateBlock}${cvBlock}${lessonsBlock}
 
 ---
 
@@ -239,5 +312,7 @@ export function parseEvalResponse(raw: string, model: string): ParsedEvalRespons
     prompt_tokens: 0,
     completion_tokens: 0,
     raw_response: raw.slice(0, 2000),
+    green_flags: parsed.green_flags ?? [],
+    red_flags: parsed.red_flags ?? [],
   }
 }

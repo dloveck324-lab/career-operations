@@ -67,6 +67,22 @@ export interface Evaluation {
   verdict_md?: string
   created_at: string
   profile_variant: ProfileVariantDb
+  /** JSON-serialized string[] — green_flags from the eval JSON output */
+  green_flags_json?: string
+  /** JSON-serialized string[] — red_flags from the eval JSON output */
+  red_flags_json?: string
+}
+
+export type EvalFeedbackFlagType = 'red' | 'green' | 'verdict' | 'score'
+
+export interface EvalFeedback {
+  id: number
+  evaluation_id: number
+  job_id: number
+  flag_type: EvalFeedbackFlagType
+  flag_text: string
+  correction?: string
+  created_at: string
 }
 
 export interface FieldMapping {

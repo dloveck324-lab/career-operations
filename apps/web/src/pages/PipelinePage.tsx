@@ -263,6 +263,15 @@ function ClaudeUsageDonut({ usage }: { usage: ClaudeUsage | null }) {
 
 function buildColumns(evaluatingJobId: number | null, positiveKeywords: string[], showEvaluatedAt = false): GridColDef[] { return [
   {
+    field: 'id', headerName: 'ID', width: 72,
+    renderCell: ({ value }) => (
+      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+        #{value as number}
+      </Typography>
+    ),
+    sortComparator: (a, b) => (a as number) - (b as number),
+  },
+  {
     field: 'company', headerName: 'Company', flex: 1, minWidth: 160,
     renderCell: ({ value, row }) => (
       <Stack direction="row" alignItems="center" gap={1} sx={{ height: '100%' }}>

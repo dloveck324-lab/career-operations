@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   getJobs, getJob, updateJobStatus, getJobStats, getJobContent, requeueJobs,
   bulkUpdateStatus, setSkipTags, getSkipPatterns,
+  getLatestEvaluationId, getEvaluationFlags,
   type JobStatus,
 } from '../db/queries.js'
 import { extractSkipTags } from '../claude/skip-tagger.js'
@@ -23,10 +24,19 @@ export async function jobRoutes(app: FastifyInstance) {
 
   app.get('/jobs/:id', async (req) => {
     const { id } = req.params as { id: string }
-    const job = getJob(Number(id))
+    const numId = Number(id)
+    const job = getJob(numId)
     if (!job) throw app.httpErrors.notFound('Job not found')
-    const content = getJobContent(Number(id))
-    return { ...job, content }
+    const content = getJobContent(numId)
+    const evaluation_id = getLatestEvaluationId(numId)
+    const flags = evaluation_id ? getEvaluationFlags(evaluation_id) : { green: [], red: [] }
+    return {
+      ...job,
+      content,
+      evaluation_id: evaluation_id ?? undefined,
+      green_flags: flags.green,
+      red_flags: flags.red,
+    }
   })
 
   app.post('/jobs/bulk-status', async (req) => {

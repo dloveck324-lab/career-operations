@@ -548,14 +548,113 @@ export function saveEvaluation(data: {
   verdict_md?: string
   raw_response?: string
   profile_variant?: 'healthcare' | 'generic'
-}) {
-  db.prepare(`
+  green_flags?: string[]
+  red_flags?: string[]
+}): number {
+  const result = db.prepare(`
     INSERT INTO evaluations
-      (job_id, model, prompt_tokens, completion_tokens, score, verdict_md, raw_response, profile_variant)
+      (job_id, model, prompt_tokens, completion_tokens, score, verdict_md, raw_response, profile_variant,
+       green_flags_json, red_flags_json)
     VALUES
       (@job_id, @model, @prompt_tokens, @completion_tokens, @score, @verdict_md, @raw_response,
-       COALESCE(@profile_variant, 'generic'))
-  `).run({ ...data, profile_variant: data.profile_variant ?? null })
+       COALESCE(@profile_variant, 'generic'),
+       @green_flags_json, @red_flags_json)
+  `).run({
+    job_id: data.job_id,
+    model: data.model,
+    prompt_tokens: data.prompt_tokens ?? null,
+    completion_tokens: data.completion_tokens ?? null,
+    score: data.score,
+    verdict_md: data.verdict_md ?? null,
+    raw_response: data.raw_response ?? null,
+    profile_variant: data.profile_variant ?? null,
+    green_flags_json: data.green_flags ? JSON.stringify(data.green_flags) : null,
+    red_flags_json: data.red_flags ? JSON.stringify(data.red_flags) : null,
+  })
+  return Number(result.lastInsertRowid)
+}
+
+// ── Eval feedback ─────────────────────────────────────────────────────────────
+
+export function getLatestEvaluationId(job_id: number): number | null {
+  const row = db.prepare(`
+    SELECT id FROM evaluations WHERE job_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
+  `).get(job_id) as { id?: number } | undefined
+  return row?.id ?? null
+}
+
+export function getEvaluationFlags(evaluation_id: number): { green: string[]; red: string[] } {
+  const row = db.prepare(`
+    SELECT green_flags_json, red_flags_json FROM evaluations WHERE id = ?
+  `).get(evaluation_id) as { green_flags_json?: string; red_flags_json?: string } | undefined
+  if (!row) return { green: [], red: [] }
+  const parse = (s?: string) => {
+    if (!s) return []
+    try { const v = JSON.parse(s); return Array.isArray(v) ? v : [] } catch { return [] }
+  }
+  return { green: parse(row.green_flags_json), red: parse(row.red_flags_json) }
+}
+
+export function insertEvalFeedback(data: {
+  evaluation_id: number
+  job_id: number
+  flag_type: 'red' | 'green' | 'verdict' | 'score'
+  flag_text: string
+  correction?: string
+}): number {
+  const result = db.prepare(`
+    INSERT INTO eval_feedback (evaluation_id, job_id, flag_type, flag_text, correction)
+    VALUES (@evaluation_id, @job_id, @flag_type, @flag_text, @correction)
+  `).run({ ...data, correction: data.correction ?? null })
+  return Number(result.lastInsertRowid)
+}
+
+export function getFeedbackForEvaluation(evaluation_id: number) {
+  return db.prepare(`
+    SELECT * FROM eval_feedback WHERE evaluation_id = ? ORDER BY created_at DESC
+  `).all(evaluation_id) as Array<{
+    id: number
+    evaluation_id: number
+    job_id: number
+    flag_type: string
+    flag_text: string
+    correction: string | null
+    created_at: string
+  }>
+}
+
+export function getFeedbackForJob(job_id: number) {
+  return db.prepare(`
+    SELECT * FROM eval_feedback WHERE job_id = ? ORDER BY created_at DESC
+  `).all(job_id) as Array<{
+    id: number
+    evaluation_id: number
+    job_id: number
+    flag_type: string
+    flag_text: string
+    correction: string | null
+    created_at: string
+  }>
+}
+
+/**
+ * Return recent corrections, deduped on flag_text (newest wins). Used to
+ * assemble the "LESSONS FROM PRIOR FEEDBACK" block injected into every
+ * evaluator prompt. Only rows with a `correction` are returned — a thumb
+ * without explanation isn't actionable guidance for the model.
+ */
+export function getRecentLessons(limit = 15): Array<{ flag_text: string; correction: string; flag_type: string }> {
+  return db.prepare(`
+    SELECT flag_text, correction, flag_type FROM (
+      SELECT flag_text, correction, flag_type, created_at,
+             ROW_NUMBER() OVER (PARTITION BY flag_text ORDER BY created_at DESC) AS rn
+      FROM eval_feedback
+      WHERE correction IS NOT NULL AND correction != ''
+    )
+    WHERE rn = 1
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(limit) as Array<{ flag_text: string; correction: string; flag_type: string }>
 }
 
 export function getTokenUsage(since: 'day' | 'week' | 'month' = 'day'): { prompt: number; completion: number; total: number } {
