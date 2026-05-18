@@ -12,6 +12,7 @@ import {
   Search, Close, Assessment, Pause, ArrowDropDown,
   LightMode, DarkMode, SettingsBrightness, Settings,
   SmartToyOutlined, MoreVert, ExpandMore, Lightbulb,
+  LinkOff,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -657,6 +658,19 @@ export function PipelinePage() {
     try { await api.pauseScan(); setScanToast({ text: 'Pausing after current phase...', severity: 'info' }) } catch { /* ignore */ }
   }
 
+  /**
+   * Standalone "Re-check links" trigger. Streams progress via the same
+   * SSE channel SCAN uses, so the existing toast / scan-state UI works
+   * unchanged. Surfaces a manual sweep that's normally only done as part
+   * of SCAN — useful right before bulk apply or after a long pause.
+   */
+  const handleRecheckLinks = async () => {
+    setScanning(true)
+    setScanToast({ text: 'Re-checking links for expired postings…', severity: 'info' })
+    try { await api.recheckLinks() }
+    catch (err) { setScanning(false); setScanToast({ text: `Re-check failed: ${err}`, severity: 'warning' }) }
+  }
+
   // Evaluate handlers
   const runEvaluate = async (opts?: { model?: 'haiku' | 'sonnet'; limit?: number; company?: string }) => {
     setEvaluating(true)
@@ -900,6 +914,15 @@ export function PipelinePage() {
                 </Button>
               )}
             </Box>
+
+            {/* Re-check links — manual sweep without the per-company crawl */}
+            {!scanning && (
+              <Tooltip title="Re-check links: verify prescreened/evaluated jobs are still live (incl. soft-404 detection)">
+                <IconButton size="small" onClick={handleRecheckLinks} disabled={evaluating} sx={{ color: 'text.secondary' }}>
+                  <LinkOff fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
 
             {/* EVALUATE */}
             <ButtonGroup size="small" disabled={scanning} variant="outlined">

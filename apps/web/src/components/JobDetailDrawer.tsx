@@ -2,12 +2,12 @@ import {
   Drawer, Box, Typography, Stack, Chip, Button, IconButton,
   Divider, CircularProgress, Alert, ButtonGroup, Menu, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, RadioGroup, FormControlLabel, Radio,
-  Popover, TextField,
+  Popover, TextField, Tooltip,
   useTheme, useMediaQuery,
 } from '@mui/material'
 import {
   Close, OpenInNew, Send, SkipNext, Assessment, CheckCircle, ArrowDropDown,
-  ThumbDownAltOutlined, ThumbDownAlt,
+  ThumbDownAltOutlined, ThumbDownAlt, LinkOff,
 } from '@mui/icons-material'
 import { useState, useMemo, useEffect } from 'react'
 import { marked } from 'marked'
@@ -131,6 +131,33 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
     setLoading(null)
     onStatusChange()
     onClose()
+  }
+
+  /**
+   * On-demand link recheck. Useful right before clicking Auto Fill — catches
+   * the case where a job was scored a week ago but has since been pulled.
+   * Closed → moves to skipped + closes the drawer.
+   */
+  const handleRecheck = async () => {
+    if (!job) return
+    setLoading('recheck')
+    try {
+      const result = await api.recheckJob(job.id)
+      if (result.status === 'closed') {
+        setMessage('Posting is no longer active — moved to Closed.')
+        onStatusChange()
+        setTimeout(() => onClose(), 1200)
+      } else if (result.status === 'active') {
+        setMessage('Posting is still active.')
+        setTimeout(() => setMessage(prev => prev === 'Posting is still active.' ? null : prev), 2000)
+      } else {
+        setMessage('Could not verify (network or auth wall) — try opening the URL manually.')
+      }
+    } catch (err) {
+      setMessage(`Re-check failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setLoading(null)
+    }
   }
 
   const handleSkipConfirm = async (reason: string | undefined) => {
@@ -317,6 +344,19 @@ export function JobDetailDrawer({ job, onClose, onStatusChange }: Props) {
                   Applied
                 </Button>
               )}
+
+              <Tooltip title="Verify the posting is still live (HEAD + soft-404 detection)">
+                <Button
+                  variant="text"
+                  color="inherit"
+                  size="small"
+                  startIcon={loading === 'recheck' ? <CircularProgress size={14} color="inherit" /> : <LinkOff fontSize="small" />}
+                  onClick={handleRecheck}
+                  disabled={!!loading}
+                >
+                  Re-check
+                </Button>
+              </Tooltip>
 
               <Button
                 variant="text"

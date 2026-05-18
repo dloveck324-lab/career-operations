@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { runScan, type ScanEvent } from '../scanner/runner.js'
+import { runStandaloneLinkCheck, recheckSingleJob } from '../scanner/link-checker.js'
 import { startScanRun, updateScanRun } from '../db/queries.js'
 
 // Clients waiting for SSE events during a scan
@@ -72,6 +73,38 @@ export async function scanRoutes(app: FastifyInstance) {
       }
     }).catch(err => {
       scanPauseRequested = false
+      updateScanRun(runId, { ended_at: new Date().toISOString(), status: 'failed' })
+      broadcastScanEvent({ type: 'error', runId, message: String(err) })
+    })
+
+    return { runId }
+  })
+
+  /**
+   * Standalone link recheck — sweeps every prescreened/evaluated job (no
+   * recency cutoff). Streams progress via the existing /scan/events SSE so
+   * the topbar progress UI works out of the box.
+   */
+  app.post('/scan/link-check', async () => {
+    const runId = startScanRun()
+    broadcastScanEvent({ type: 'start', runId })
+
+    runStandaloneLinkCheck(runId, broadcastScanEvent).then(result => {
+      updateScanRun(runId, {
+        ended_at: new Date().toISOString(),
+        found: 0,
+        added: 0,
+        skipped: result.closed,
+        status: 'done',
+      })
+      broadcastScanEvent({
+        type: 'done',
+        runId,
+        found: 0, added: 0, skipped: result.closed, existing: 0,
+        linkClosed: result.closed,
+        message: `Re-check done — ${result.checked} verified, ${result.closed} expired`,
+      })
+    }).catch(err => {
       updateScanRun(runId, { ended_at: new Date().toISOString(), status: 'failed' })
       broadcastScanEvent({ type: 'error', runId, message: String(err) })
     })
